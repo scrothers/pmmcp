@@ -114,6 +114,14 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y bubblewrap
 
+      - name: Allow unprivileged user namespaces (Ubuntu 24.04 AppArmor)
+        if: runner.os == 'Linux'
+        # ubuntu-24.04 runners restrict unprivileged userns via AppArmor, which
+        # breaks bwrap's loopback setup under --unshare-net (RTM_NEWADDR EPERM).
+        # Stock Ubuntu desktops load the bubblewrap AppArmor profile that grants
+        # this; the runner image does not, so relax the sysctl for CI only.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       - name: Unit tests (race, sandbox enforced)
         shell: bash
         env:
@@ -223,6 +231,11 @@ jobs:
 
       - name: Install bubblewrap (Linux strict sandbox)
         run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
+      - name: Allow unprivileged user namespaces (Ubuntu 24.04 AppArmor)
+        # Same relaxation as the unit-test job: bwrap --unshare-net needs it on
+        # the runner image (see that job's comment for the full story).
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: E2E tests
         env:
