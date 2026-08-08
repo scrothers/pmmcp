@@ -107,6 +107,9 @@ type Server struct {
 	// done channel are stored — not a context.Context (containedctx).
 	runCancel context.CancelFunc
 	runDoneCh <-chan struct{}
+	// bg tracks the background supervision loops so Close can wait for them
+	// to observe cancellation before the store closes underneath them.
+	bg sync.WaitGroup
 }
 
 // Options configures the daemon.
@@ -282,13 +285,17 @@ func New(ctx context.Context, opts Options) (*Server, error) {
 	}, nil
 }
 
-// Close releases resources. It cancels the run context so background loops
-// (auto-restart, watch dispatch) stop before the store closes, avoiding a
-// goroutine leak on New+Close without a ctx cancellation.
+// Close releases resources. It cancels the run context and waits for the
+// background loops (auto-restart, watch dispatch, webhook dispatch) to
+// observe it before the store closes — a loop mid-query while the SQLite
+// handle shuts down is a real race, and on Windows it also leaves the
+// database file undeletable. Managed children are deliberately NOT stopped:
+// they outlive the daemon so boot relaunch can adopt live predecessors.
 func (s *Server) Close() error {
 	if s.runCancel != nil {
 		s.runCancel()
 	}
+	s.bg.Wait()
 	if s.ln != nil {
 		_ = s.ln.Close()
 	}
@@ -321,12 +328,15 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 			_, _ = s.audit.Append(runCtx, audit.Record{Action: "daemon.relaunch", Detail: err.Error()})
 		}
 	}
-	// Background supervision: crash/unhealthy auto-restart for opted-in processes.
-	go s.runAutoRestartLoop(runCtx)
+	// Background supervision loops, tracked so Close can drain them before
+	// releasing the store they query.
+	s.bg.Add(3)
+	// Crash/unhealthy auto-restart for opted-in processes.
+	go func() { defer s.bg.Done(); s.runAutoRestartLoop(runCtx) }()
 	// Resume any watches that were set (in-memory only for this process lifetime).
-	go s.runWatchDispatchers(runCtx)
+	go func() { defer s.bg.Done(); s.runWatchDispatchers(runCtx) }()
 	// Deliver domain events to registered webhooks.
-	go s.runWebhookDispatch(runCtx)
+	go func() { defer s.bg.Done(); s.runWebhookDispatch(runCtx) }()
 
 	gs := grpc.NewServer()
 	s.RegisterGRPC(gs)
