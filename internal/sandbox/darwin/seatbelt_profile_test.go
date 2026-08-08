@@ -131,7 +131,11 @@ func TestSeatbeltProfileStandardReadDenyEdgeCases(t *testing.T) {
 	if strings.Contains(p, "relative/deny") {
 		t.Errorf("relative ReadDeny entries must be skipped:\n%s", p)
 	}
-	if !strings.Contains(p, absDeny) {
+	// The profile writer renders the path with %q, which backslash-escapes
+	// a windows path (each \ becomes \\) — so the raw absDeny string never
+	// appears verbatim in p there. Compare against the same %q rendering
+	// the production code uses instead of the raw path.
+	if !strings.Contains(p, fmt.Sprintf("%q", absDeny)) {
 		t.Errorf("absolute ReadDeny entries must produce a deny line:\n%s", p)
 	}
 }

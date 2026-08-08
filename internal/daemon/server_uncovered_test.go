@@ -659,13 +659,24 @@ func TestDoStartListScanFindsRecordFromPriorProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 	c1 := dialDaemon(ctx1, t, srv1, cfg1.IPC.Endpoint)
+	var start1 api.StartResult
 	if err := c1.Call(ctx1, api.MethodStart, api.StartPayload{
 		Name: "scanfind", Command: []string{"sleep", "30"}, Sandbox: "off", Project: "scanproj",
-	}, &map[string]any{}); err != nil {
+	}, &start1); err != nil {
 		t.Fatalf("start on srv1: %v", err)
 	}
 	// Do not stop the process: it stays non-terminal in the store. Shut down
-	// srv1 without cancelling its process (Setpgid, survives).
+	// srv1 without cancelling its process (Setpgid, survives). srv2's fresh
+	// in-memory manager never tracked this PID (only srv1's did), so neither
+	// its later Replace-driven mgr.Stop nor dialDaemon's stopAllForTest sweep
+	// (c1's connection is already dead by the time its cleanup runs) can
+	// reach it — kill it directly by PID so it isn't still alive, holding
+	// stderr.log open, when t.TempDir's cleanup runs.
+	t.Cleanup(func() {
+		if p, err := os.FindProcess(start1.PID); err == nil {
+			_ = p.Kill()
+		}
+	})
 	cancel1()
 	_ = srv1.Close()
 

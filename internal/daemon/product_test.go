@@ -86,23 +86,37 @@ func startTestDaemon(t *testing.T) (context.Context, context.CancelFunc, *ipc.Cl
 	return ctx, cancel, c, dir
 }
 
-// stopAllForTest force-stops every process still known to the daemon and
-// waits (via the synchronous Force stop path) for each to actually exit.
-// Server.Close cancels the daemon's run context but does not stop managed
-// child processes or wait for background goroutines before returning, so a
-// test that leaves a "sleep"-style process running would otherwise still
-// have it alive when t.TempDir's cleanup runs next. POSIX allows unlinking a
-// file an unrelated process still has open, so this race is invisible on
-// Linux/macOS; Windows refuses to delete an open file, so the orphaned
-// child's log handle turns into a "used by another process" cleanup failure.
+// stopAllForTest removes every process still known to the daemon and waits
+// (via the synchronous Stop-then-delete path doRemove takes) for each to
+// actually exit. Server.Close cancels the daemon's run context but does not
+// stop managed child processes or wait for background goroutines before
+// returning, so a test that leaves a "sleep"-style process running would
+// otherwise still have it alive when t.TempDir's cleanup runs next. POSIX
+// allows unlinking a file an unrelated process still has open, so this race
+// is invisible on Linux/macOS; Windows refuses to delete an open file, so
+// the orphaned child's log handle turns into a "used by another process"
+// cleanup failure.
+//
+// Two things a plain Force-stop sweep would miss, both handled here:
+//   - Some tests deliberately leave the client on a restricted/foreign
+//     session (cross-session-denial tests): switch to a full-role session
+//     first so this sweep can see and act on every process regardless of
+//     who started it — authorizeTarget allows RoleFull unconditionally.
+//   - api.MethodStop alone isn't enough for an AutoRestart:true process:
+//     s.autoRestart is only ever cleared by doRemove, never by doStop or
+//     doDisable, so runAutoRestartLoop's next tick (as fast as 25ms in these
+//     test configs) can resurrect a stopped process moments after this sweep
+//     returns, leaving a fresh orphan anyway. MethodRemove stops *and*
+//     clears s.autoRestart, so nothing comes back.
 func stopAllForTest(ctx context.Context, t *testing.T, c *ipc.Client) {
 	t.Helper()
+	c.SetSession("sess-cleanup-sweep", "full")
 	var list []api.ProcessView
-	if err := c.Call(ctx, api.MethodList, api.ListPayload{All: true, IncludeExited: false}, &list); err != nil {
+	if err := c.Call(ctx, api.MethodList, api.ListPayload{All: true, IncludeExited: true}, &list); err != nil {
 		return
 	}
 	for _, p := range list {
-		_ = c.Call(ctx, api.MethodStop, api.IDPayload{ID: p.ID, Force: true}, &map[string]any{})
+		_ = c.Call(ctx, api.MethodRemove, api.IDPayload{ID: p.ID}, &map[string]any{})
 	}
 }
 
