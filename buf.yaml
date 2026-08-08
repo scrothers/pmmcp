@@ -4,6 +4,15 @@ modules:
 lint:
   use:
     - STANDARD
+  except:
+    # Deliberate naming, not drift: pmmcp.v1 has exactly one service ("Daemon" —
+    # a DaemonService suffix adds nothing), and the streaming RPCs return
+    # per-chunk element types (LogChunk, EventChunk), not response envelopes.
+    # Client and daemon ship from this repo together and the IPC version
+    # handshake pins compatibility, so the /pmmcp.v1.Daemon/ method paths are
+    # stable by construction.
+    - SERVICE_SUFFIX
+    - RPC_RESPONSE_STANDARD_NAME
 breaking:
   use:
     - FILE
