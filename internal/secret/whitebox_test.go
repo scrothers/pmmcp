@@ -84,7 +84,15 @@ func TestEvalExistingRecursesToParent(t *testing.T) {
 	dir := t.TempDir()
 	missing := filepath.Join(dir, "a", "b", "missing.txt")
 	got := evalExisting(missing)
-	want := filepath.Join(dir, "a", "b", "missing.txt")
+	// evalExisting recurses up to the nearest existing ancestor (dir) and
+	// resolves it via EvalSymlinks before rejoining the missing suffix, so
+	// the expectation must resolve dir the same way (e.g. macOS's
+	// /var -> /private/var means dir itself is a symlink target).
+	resolvedDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		resolvedDir = dir
+	}
+	want := filepath.Join(resolvedDir, "a", "b", "missing.txt")
 	if got != want {
 		t.Fatalf("evalExisting(%q) = %q, want %q", missing, got, want)
 	}

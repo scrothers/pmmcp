@@ -194,6 +194,11 @@ func TestNoShellWrapping(t *testing.T) {
 
 func TestCwdAndEnv(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		// Must be checked before Start: /bin/sh does not exist on Windows, so
+		// Start itself fails rather than producing output to compare.
+		t.Skip("cwd/env shell helper is unix-oriented")
+	}
 	m := local.New()
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -219,9 +224,6 @@ func TestCwdAndEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantPrefix := "from-overlay\n"
-	if runtime.GOOS == "windows" {
-		t.Skip("cwd/env shell helper is unix-oriented")
-	}
 	if len(out) < len(wantPrefix) || string(out[:len(wantPrefix)]) != wantPrefix {
 		t.Fatalf("stdout = %q, want prefix %q", out, wantPrefix)
 	}

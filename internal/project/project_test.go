@@ -42,8 +42,11 @@ func TestDetectGitDirFromNested(t *testing.T) {
 	if root != wantRoot {
 		t.Errorf("root = %q, want %q", root, wantRoot)
 	}
-	if key != wantRoot {
-		t.Errorf("key = %q, want %q", key, wantRoot)
+	// key is symlink-resolved (see Key); wantRoot itself may not be (e.g.
+	// macOS's /var -> /private/var), so the expectation must be resolved too.
+	wantKey := mustKey(t, wantRoot)
+	if key != wantKey {
+		t.Errorf("key = %q, want %q", key, wantKey)
 	}
 	if key != project.Key(root) {
 		t.Errorf("key = %q, Key(root) = %q", key, project.Key(root))
@@ -71,8 +74,11 @@ func TestDetectGitFileFromNested(t *testing.T) {
 	if root != wantRoot {
 		t.Errorf("root = %q, want %q", root, wantRoot)
 	}
-	if key != wantRoot {
-		t.Errorf("key = %q, want %q", key, wantRoot)
+	// key is symlink-resolved (see Key); wantRoot itself may not be (e.g.
+	// macOS's /var -> /private/var), so the expectation must be resolved too.
+	wantKey := mustKey(t, wantRoot)
+	if key != wantKey {
+		t.Errorf("key = %q, want %q", key, wantKey)
 	}
 }
 
@@ -137,8 +143,11 @@ func TestDetectNoMarkersUsesCwd(t *testing.T) {
 	if root != want {
 		t.Errorf("root = %q, want cwd %q (no markers in tree)", root, want)
 	}
-	if key != want {
-		t.Errorf("key = %q, want %q", key, want)
+	// key is symlink-resolved (see Key); want itself may not be (e.g. macOS's
+	// /var -> /private/var), so the expectation must be resolved too.
+	wantKey := mustKey(t, want)
+	if key != wantKey {
+		t.Errorf("key = %q, want %q", key, wantKey)
 	}
 }
 
@@ -156,7 +165,7 @@ func TestKey(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	got := project.Key(dir)
-	want := filepath.Clean(mustAbs(t, dir))
+	want := mustKey(t, filepath.Clean(mustAbs(t, dir)))
 	if got != want {
 		t.Errorf("Key = %q, want %q", got, want)
 	}
@@ -165,7 +174,7 @@ func TestKey(t *testing.T) {
 	}
 	rel := filepath.Join(dir, "x", "..", "y")
 	got = project.Key(rel)
-	want = filepath.Clean(mustAbs(t, filepath.Join(dir, "y")))
+	want = mustKey(t, filepath.Clean(mustAbs(t, filepath.Join(dir, "y"))))
 	if got != want {
 		t.Errorf("Key(rel) = %q, want %q", got, want)
 	}
@@ -237,4 +246,16 @@ func mustAbs(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return abs
+}
+
+// mustKey mirrors project.Key's own symlink resolution (EvalSymlinks, falling
+// back to the cleaned input when resolution fails) so test expectations match
+// production's normalization on platforms where the OS temp dir is itself a
+// symlink (e.g. macOS's /var -> /private/var).
+func mustKey(t *testing.T, path string) string {
+	t.Helper()
+	if resolved, err := filepath.EvalSymlinks(path); err == nil && resolved != "" {
+		return filepath.Clean(resolved)
+	}
+	return path
 }

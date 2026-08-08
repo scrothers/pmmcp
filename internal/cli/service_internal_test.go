@@ -157,6 +157,9 @@ func TestResolveDaemonPathNotFound(t *testing.T) {
 // error branch: with the working directory removed out from under the
 // process, resolving a relative path via os.Getwd fails.
 func TestResolveDaemonPathAbsError(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("removed-cwd Abs failure is Linux-specific")
+	}
 	orig, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Getwd: %v", err)

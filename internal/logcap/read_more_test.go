@@ -17,6 +17,7 @@ package logcap_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -53,6 +54,9 @@ func TestTailReadError(t *testing.T) {
 
 func TestTailOpenPermissionDenied(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits don't block reads the way chmod 600 implies")
+	}
 	if os.Getuid() == 0 {
 		t.Skip("running as root: directory permission bits don't block root")
 	}
