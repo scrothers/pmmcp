@@ -53,3 +53,16 @@ func TestPathIsPerCallUnique(t *testing.T) {
 		t.Fatalf("two Path() calls returned the same path %q", a)
 	}
 }
+
+// TestPipePathShapeAndUniqueness covers the Windows branch directly — pipe
+// names are pure strings, so this runs on every OS.
+func TestPipePathShapeAndUniqueness(t *testing.T) {
+	t.Parallel()
+	a, b := testsock.PipePath(t), testsock.PipePath(t)
+	if !strings.HasPrefix(a, `\\.\pipe\pmmcp-test-`) {
+		t.Fatalf("PipePath() = %q, want \\\\.\\pipe\\pmmcp-test- prefix", a)
+	}
+	if a == b {
+		t.Fatalf("two PipePath() calls returned the same name %q", a)
+	}
+}

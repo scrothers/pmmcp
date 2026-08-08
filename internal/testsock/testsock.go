@@ -41,12 +41,27 @@ import (
 func Path(t testing.TB) string {
 	t.Helper()
 	if runtime.GOOS == "windows" {
-		var b [8]byte
-		if _, err := rand.Read(b[:]); err != nil {
-			t.Fatalf("testsock: rand: %v", err)
-		}
-		return `\\.\pipe\pmmcp-test-` + hex.EncodeToString(b[:])
+		return PipePath(t)
 	}
+	return UnixPath(t)
+}
+
+// PipePath returns a fresh Windows named-pipe endpoint. Exported separately
+// (and callable on any OS — it is pure string generation) so its branch stays
+// directly testable everywhere.
+func PipePath(t testing.TB) string {
+	t.Helper()
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		t.Fatalf("testsock: rand: %v", err)
+	}
+	return `\\.\pipe\pmmcp-test-` + hex.EncodeToString(b[:])
+}
+
+// UnixPath returns a fresh short Unix-socket path in its own MkdirTemp
+// directory, removed via t.Cleanup.
+func UnixPath(t testing.TB) string {
+	t.Helper()
 	dir, err := os.MkdirTemp("", "pms")
 	if err != nil {
 		t.Fatalf("testsock: mkdirtemp: %v", err)
