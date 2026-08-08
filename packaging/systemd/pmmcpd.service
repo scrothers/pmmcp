@@ -1,0 +1,40 @@
+# pmmcpd — per-user process-supervision daemon (systemd user unit).
+#
+# This is the unit shipped by the distro packages (installed to
+# /usr/lib/systemd/user/pmmcpd.service, binary at /usr/bin/pmmcpd).
+# If you built from source instead, prefer `pmmcp install-service`, which
+# generates a unit pointing at your actual binary location.
+#
+# Enable per user:   systemctl --user enable --now pmmcpd.service
+# Headless servers:  sudo loginctl enable-linger <user>   (see README.md)
+
+[Unit]
+Description=pmmcp process manager daemon
+Documentation=https://github.com/scrothers/pmmcp
+# A user manager has no network-online semantics worth ordering on; the daemon
+# owns its own socket and needs nothing but the user session.
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pmmcpd run
+# Safe subset of config is re-applied without a restart (same as `pmmcp reload`).
+ExecReload=/usr/bin/pmmcp reload
+
+Restart=on-failure
+RestartSec=2
+
+# Give the daemon time to run its graceful shutdown (drain RPCs, stop
+# supervised children in order) before systemd escalates to SIGKILL.
+TimeoutStopSec=30
+KillMode=mixed
+
+# Deliberately *no* NoNewPrivileges/ProtectSystem/ProtectHome here: pmmcpd is
+# itself the sandboxing layer — it confines children via bubblewrap and must
+# be able to create user namespaces and reach the project trees it supervises.
+# Hardening that breaks bwrap would silently trade real child isolation for
+# cosmetic daemon isolation. See docs/security.md.
+LimitNOFILE=65536
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,79 @@
+version: "3"
+
+vars:
+  GOFLAGS: ""
+
+tasks:
+  default:
+    desc: List tasks
+    cmds:
+      - task --list
+
+  build:
+    desc: Build pmmcp and pmmcpd into ./bin
+    cmds:
+      - mkdir -p bin
+      - go build -o bin/pmmcp ./cmd/pmmcp
+      - go build -o bin/pmmcpd ./cmd/pmmcpd
+
+  test:
+    desc: Run unit tests
+    cmds:
+      - go test ./...
+
+  test:all:
+    desc: Unit + e2e + integration
+    cmds:
+      - go test ./...
+      - go test -tags=e2e ./test/e2e/
+      - go test -tags=integration ./test/integration/
+
+  verify:
+    desc: Full local completeness proof (no push)
+    cmds:
+      - |
+        out=$(gofmt -l . | grep -v vendor || true)
+        if [ -n "$out" ]; then echo "$out"; exit 1; fi
+      - bash scripts/license-headers.sh check
+      - go test ./... -count=1
+      - go test -tags=e2e ./test/e2e/ -count=1
+      - go test -tags=integration ./test/integration/ -count=1
+      - mkdir -p bin
+      - go build -o bin/pmmcp ./cmd/pmmcp
+      - go build -o bin/pmmcpd ./cmd/pmmcpd
+      - |
+        if [ "$(uname -s)" = "Linux" ]; then
+          go test ./internal/process/local/ -count=1 -run 'Strict'
+        fi
+      - GOOS=windows go build -o /tmp/pmmcpd.exe ./cmd/pmmcpd
+      - GOOS=darwin go build -o /tmp/pmmcpd-darwin ./cmd/pmmcpd
+
+  vet:
+    desc: go vet
+    cmds:
+      - go vet ./...
+
+  fmt:
+    desc: gofmt -s -w
+    cmds:
+      - gofmt -s -w .
+
+  lint:
+    desc: golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  license:
+    desc: Check Apache-2.0 headers on all Go files
+    cmds:
+      - bash scripts/license-headers.sh check
+
+  license:fix:
+    desc: Add missing Apache-2.0 headers to Go files
+    cmds:
+      - bash scripts/license-headers.sh fix
+
+  tidy:
+    desc: go mod tidy
+    cmds:
+      - go mod tidy

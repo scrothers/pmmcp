@@ -1,0 +1,34 @@
+# Dependabot: keep Go modules and the SHA-pinned GitHub Actions fresh.
+#
+# Actions in workflows are pinned to immutable commit SHAs (supply-chain
+# hardening); without these updates the pins silently rot. Dependabot updates
+# the SHA and the trailing version comment together.
+#
+# Dependency bumps stay isolated from feature work (one group PR per ecosystem
+# per week), matching the project's one-logical-change-per-commit rule.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
+    groups:
+      go-deps-minor-patch:
+        update-types: [minor, patch]
+    # Major bumps arrive as individual PRs so breaking changes get their own review.
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+    groups:
+      actions-all:
+        patterns: ["*"]

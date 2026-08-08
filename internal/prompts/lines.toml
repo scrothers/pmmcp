@@ -1,0 +1,115 @@
+# Single-line agent-facing copy for tools, resources, and MCP prompt metadata.
+# Multi-line bodies live under md/*.md. Edit here; rebuild — no Go string tables.
+#
+# Style: lead with the outcome; name critical constraints on high-traffic tools;
+# match real field names (command, timeout_sec, wait). No invented flags.
+
+[tools]
+pm_whoami = "Caller identity: OS user, roles/capabilities, session id"
+pm_daemon_info = "Daemon version, IPC version, uptime, paths (redacted)"
+pm_daemon_reload = "Reload safe config subset (e.g. log level, sandbox default for new starts)"
+pm_project_current = "Resolve the current project from cwd / pmmcp.yaml / git root"
+pm_project_list = "List known projects (key → root)"
+pm_start = "Start a managed process. `command` is argv string array (not shell). Default sandbox strict/fail-closed"
+pm_stop = "Stop by id or name (graceful, then force if needed)"
+pm_restart = "Stop then start the same process id"
+pm_update = "Mutate process spec in place; may restart to apply"
+pm_remove = "Forget process record; optional purge_logs"
+pm_list = "List processes (filters: project, status, profile)"
+pm_status = "Full status: state, ports, sandbox, health, exit info"
+pm_run = "One-shot job (prefer over pm_start for non-services). Supports wait + timeout_sec"
+pm_wait = "Block until process exits or health condition"
+pm_enable = "Mark desired=running (eligible for boot relaunch)"
+pm_disable = "Mark desired=stopped; stop if running"
+pm_health_check = "Force a health probe now"
+pm_group_create = "Create a group with members, order, depends_on"
+pm_group_remove = "Remove a group definition"
+pm_group_list = "List process groups"
+pm_group_status = "Group phase, ready/desired counts, member summary"
+pm_group_start = "Start group members in dependency order"
+pm_group_stop = "Stop group members in reverse dependency order"
+pm_group_restart = "Restart all group members"
+pm_profile_list = "List profiles for the project"
+pm_profile_get = "Get one profile's settings"
+pm_profile_create = "Create a named profile (sandbox, env defaults, …)"
+pm_profile_update = "Update an existing profile"
+pm_profile_delete = "Delete a profile"
+pm_profile_use = "Set the active profile for this session"
+pm_session_info = "Current session and harness id"
+pm_session_end = "End this session (disconnect equivalent)"
+pm_share = "Grant another session a capability on a resource"
+pm_unshare = "Revoke a prior share grant"
+pm_logs = "Tail/slice captured stdout|stderr|both (text)"
+pm_grep = "Regex search captured logs"
+pm_errors = "Heuristic extract of error-like log lines"
+pm_logs_export = "Export a log bundle"
+pm_logs_ship = "Ship logs to a configured sink (if enabled)"
+pm_logs_subscribe = "Stream live log follow"
+pm_logs_unsubscribe = "End a log follow subscription"
+pm_events = "Query domain lifecycle events"
+pm_events_subscribe = "Stream domain events"
+pm_events_unsubscribe = "End an event stream"
+pm_events_subscriptions = "List active event subscriptions"
+pm_audit_query = "Query audit records (who did what)"
+pm_metrics_snapshot = "Point-in-time process/daemon metrics (no HTTP scrape)"
+pm_validate = "Validate pmmcp.yaml policy before apply (sandbox, argv, webhooks, …)"
+pm_diff = "Diff desired declare vs currently running"
+pm_apply = "Apply pmmcp.yaml: create/start services in the diff (no separate start flag)"
+pm_declare_show = "Show effective declare / loaded document"
+pm_ports = "Declared and discovered ports/URLs for a process"
+pm_runtime_info = "Driver/engine details for a process"
+pm_sandbox_profiles = "List sandbox profiles and effective capabilities"
+pm_secret_list = "List secret refs (never values)"
+pm_secret_ref_check = "Check that a secret:// ref resolves"
+pm_secret_set = "Store a secret in the keyring backend (avoid echoing values)"
+pm_watch_set = "Configure hot-reload file watch for a process"
+pm_watch_status = "Current watch configuration/state"
+pm_webhook_create = "Create an allowlisted outbound webhook"
+pm_webhook_update = "Update a webhook"
+pm_webhook_delete = "Delete a webhook"
+pm_webhook_list = "List webhooks"
+pm_webhook_test = "Fire a test webhook delivery"
+pm_import = "Import Procfile/Compose into a declare draft (review warnings before apply)"
+
+# Static MCP resource descriptions (keyed by resource Name field).
+[resources]
+processes = "Managed processes in scope (JSON list)"
+daemon = "Daemon info with paths redacted"
+project-current = "Resolved current project metadata"
+declare = "Raw pmmcp.yaml for the current project"
+ports = "Declared and discovered ports table"
+events-recent = "Recent domain lifecycle events"
+docs-error-codes = "Error code reference for agents"
+docs-tool-index = "Short tool index and hard rules"
+
+# Parameterized resource template descriptions (keyed by template Name).
+[resource_templates]
+project = "Project metadata by id/key"
+process = "Process status detail by name or id"
+process-log = "Recent captured logs for a process"
+group = "Group status by name"
+
+# Dynamic per-instance resource descriptions ({{name}} filled at list time).
+[resource_dyn]
+process_status = "Status for process {{name}}"
+process_log = "Recent logs for {{name}}"
+group_status = "Status for group {{name}}"
+
+# MCP prompt short descriptions (prompts/list) — what the agent gets when picking a workflow.
+[prompt_desc]
+pmmcp_start_safe = "Start a process the safe way: argv `command`, strict sandbox, secrets by ref, verify status"
+pmmcp_debug_crash = "Diagnose a failing process: status → errors/logs → events → fix, then restart only if understood"
+pmmcp_apply_stack = "Safe declare flow: validate → diff → apply pmmcp.yaml (apply starts services; no start flag)"
+pmmcp_import_compose = "Import Procfile/Compose, review shell/secret warnings, validate, then apply"
+pmmcp_oneshot_task = "Run a one-shot with pm_run (wait + timeout_sec); prefer over pm_start for non-services"
+
+# Prompt argument descriptions. Keys are "prompt_name.arg_name".
+[prompt_arg]
+"pmmcp_start_safe.name" = "Process name unique within the project"
+"pmmcp_start_safe.argv_json" = "JSON argv array for pm_start field `command` (e.g. [\"npm\",\"run\",\"dev\"])"
+"pmmcp_start_safe.project" = "Optional project root override; default is current project"
+"pmmcp_debug_crash.name" = "Process name or proc- id to diagnose"
+"pmmcp_apply_stack.profile" = "Profile name to target; default profile if empty"
+"pmmcp_import_compose.path" = "Filesystem path to Procfile or Compose file"
+"pmmcp_oneshot_task.argv_json" = "JSON argv array for pm_run field `command`"
+"pmmcp_oneshot_task.timeout" = "Seconds for pm_run timeout_sec (default 60)"

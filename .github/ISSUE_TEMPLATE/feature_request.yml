@@ -1,0 +1,47 @@
+name: ✨ Feature request
+description: Propose a new capability or an improvement to an existing one.
+title: "[feat]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before proposing, skim [What pmmcp is not](../blob/main/README.md#-what-pmmcp-is-not) —
+        cluster orchestration, build running, and log analytics are deliberate non-goals.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't you (or your agent) do today? Describe the workflow, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should exist? CLI flags, MCP tool shape, config keys — as concrete as you can.
+    validations:
+      required: true
+  - type: checkboxes
+    id: surfaces
+    attributes:
+      label: Surfaces touched
+      description: |
+        pmmcp keeps **CLI ↔ MCP ↔ daemon parity**: a new operation normally lands on all three
+        (catalog entry + `pm_*` tool + CLI verb + daemon handler) or documents why it's omitted.
+      options:
+        - label: CLI verb
+        - label: MCP tool (`pm_*`)
+        - label: Daemon / API method
+        - label: Declarative (`pmmcp.yaml`)
+        - label: Docs only
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you tried, other tools, or why existing verbs don't cover it.
+  - type: textarea
+    id: security
+    attributes:
+      label: Security / sandbox implications
+      description: Does this widen what an agent can do? Touch secrets, the sandbox boundary, or authz capabilities?

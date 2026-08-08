@@ -1,0 +1,63 @@
+name: codeql
+
+# CodeQL static analysis (SAST) for Go source and the workflow files themselves.
+# Complements the govulncheck job in ci.yml: govulncheck finds known-vulnerable
+# dependencies actually reachable from our code; CodeQL finds defect patterns in
+# our own code (taint flows, injection, path traversal, …).
+#
+# Actions are SHA-pinned (version in the trailing comment) per supply-chain
+# hardening. Verified upstream on 2026-08-08:
+#   actions/checkout       v7.0.1
+#   actions/setup-go       v7.0.0
+#   github/codeql-action   v4.37.6
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: "27 6 * * 1" # weekly, Monday 06:27 UTC — catches new query-pack findings
+  workflow_dispatch:
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write # upload SARIF results to the Security tab
+      packages: read # CodeQL query packs
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: go
+            build-mode: autobuild
+          - language: actions # scans .github/workflows for misconfigurations
+            build-mode: none
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: matrix.language == 'go'
+        with:
+          go-version-file: go.mod
+
+      - uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-and-quality
+
+      - uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          category: "/language:${{ matrix.language }}"

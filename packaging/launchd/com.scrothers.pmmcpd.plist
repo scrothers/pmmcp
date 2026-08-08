@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  pmmcpd — per-user process-supervision daemon (macOS LaunchAgent template).
+
+  This template assumes the binaries live in /usr/local/bin. If you built from
+  source elsewhere, prefer `pmmcp install-service`, which generates this file
+  with your real paths substituted (launchd does NOT expand ~ or environment
+  variables in ProgramArguments / *Path keys — every path must be absolute).
+
+  Install:
+    cp com.scrothers.pmmcpd.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.scrothers.pmmcpd.plist
+
+  See README.md in this directory for verify / logs / uninstall.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.scrothers.pmmcpd</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/pmmcpd</string>
+    <string>run</string>
+  </array>
+
+  <!-- Start at login… -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- …and restart only on failure. A clean `launchctl bootout` or a graceful
+       zero-exit stays stopped instead of fighting the operator. -->
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+
+  <!-- Back off if the daemon crash-loops: minimum seconds between respawns. -->
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+
+  <!-- Grace window for pmmcpd's ordered shutdown (drain RPCs, stop children)
+       before launchd sends SIGKILL. Mirrors TimeoutStopSec in the systemd unit. -->
+  <key>ExitTimeOut</key>
+  <integer>30</integer>
+
+  <!-- Load for GUI logins and for SSH/background sessions alike, so a headless
+       Mac (CI runner, build box) still gets its daemon. -->
+  <key>LimitLoadToSessionType</key>
+  <array>
+    <string>Aqua</string>
+    <string>Background</string>
+  </array>
+
+  <key>SoftResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>65536</integer>
+  </dict>
+
+  <!-- Daemon stderr/stdout. Replace REPLACE_HOME with your absolute home
+       directory (e.g. /Users/you) — launchd will not expand ~ or $HOME.
+       `pmmcp install-service` fills this in for you.
+  <key>StandardOutPath</key>
+  <string>REPLACE_HOME/Library/Logs/pmmcp/pmmcpd.log</string>
+  <key>StandardErrorPath</key>
+  <string>REPLACE_HOME/Library/Logs/pmmcp/pmmcpd.log</string>
+  -->
+</dict>
+</plist>

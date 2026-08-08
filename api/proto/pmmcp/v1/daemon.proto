@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package pmmcp.v1;
+
+option go_package = "github.com/scrothers/pmmcp/internal/api/gen/pmmcp/v1;pmmcpv1";
+
+// Daemon is the private control plane over UDS/named pipe.
+service Daemon {
+  // Unary call: method name + JSON payload (maps 1:1 to catalog tools).
+  rpc Call(CallRequest) returns (CallResponse);
+
+  // Server-streaming log follow with backpressure via stream flow control.
+  rpc SubscribeLogs(SubscribeLogsRequest) returns (stream LogChunk);
+
+  // Server-streaming domain events.
+  rpc SubscribeEvents(SubscribeEventsRequest) returns (stream EventChunk);
+}
+
+message CallRequest {
+  string api_version = 1;
+  string method = 2;
+  string session = 3;
+  string role = 4;
+  bytes payload = 5; // JSON
+}
+
+message CallResponse {
+  bool ok = 1;
+  string error_code = 2;
+  string error = 3;
+  bool retryable = 4;
+  bytes payload = 5; // JSON
+}
+
+message SubscribeLogsRequest {
+  string api_version = 1;
+  string session = 2;
+  string process_id = 3;
+  string stream = 4; // stdout|stderr|both
+  int32 max_duration_sec = 5; // backpressure / max duration policy
+  string role = 6; // authz role pack; gated before streaming
+}
+
+message LogChunk {
+  string process_id = 1;
+  string stream = 2;
+  string text = 3;
+  bool eof = 4;
+}
+
+message SubscribeEventsRequest {
+  string api_version = 1;
+  string session = 2;
+  string process_id = 3; // optional filter
+  int32 max_duration_sec = 4;
+  string role = 5; // authz role pack; gated before streaming
+}
+
+message EventChunk {
+  string id = 1;
+  string type = 2;
+  string process_id = 3;
+  string message = 4;
+  int64 at_unix_ms = 5;
+  bool eof = 6;
+}

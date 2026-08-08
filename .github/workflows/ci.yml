@@ -1,0 +1,320 @@
+name: ci
+
+# The full quality gate for pmmcp. Every job runs on pull requests and on pushes
+# to the default branches; use "Run workflow" for a manual run.
+#
+# All third-party actions are pinned to an immutable commit SHA (with the human
+# version in a trailing comment) per GitHub's supply-chain hardening guidance —
+# a moved tag cannot silently change what runs. Update a pin by resolving the new
+# tag to its commit SHA (e.g. `gh api repos/OWNER/REPO/commits/vX.Y.Z --jq .sha`).
+#
+# Tool/action versions verified against upstream on 2026-08-08:
+#   actions/checkout                v7.0.1
+#   actions/setup-go                v7.0.0
+#   golangci/golangci-lint-action   v9.3.0   (golangci-lint binary v2.12.2)
+#   bufbuild/buf-setup-action       v1.50.0
+#   govulncheck (golang.org/x/vuln) v1.1.4
+#   google/addlicense               v1.2.0
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref so a fresh push doesn't queue behind a
+# stale one.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: read-only by default. No job here needs write scopes.
+permissions:
+  contents: read
+
+env:
+  # The Go floor. Keep in sync with the `go` directive in go.mod — jobs that pin
+  # a single toolchain read it from go.mod via `go-version-file`; the test matrix
+  # names it explicitly below and this constant documents the intended value.
+  GO_FLOOR: "1.25.x"
+  GOLANGCI_LINT_VERSION: "v2.12.2"
+  GOVULNCHECK_VERSION: "v1.1.4"
+  ADDLICENSE_VERSION: "v1.2.0"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Static analysis: formatting, vetting (including cross-platform build-tagged
+  # code), dependency hygiene, and the full golangci-lint suite.
+  # ---------------------------------------------------------------------------
+  lint:
+    name: lint & static analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt -s is clean
+        run: |
+          out=$(gofmt -s -l . | grep -v '^internal/api/gen/' || true)
+          if [ -n "$out" ]; then
+            echo "::error::gofmt -s needed on:"; echo "$out"; exit 1
+          fi
+
+      - name: go vet (host + every target GOOS)
+        run: |
+          # Vet the host build, then each target platform so build-tagged files
+          # (sandbox/service darwin & windows) are compiled and checked from the
+          # Linux runner — the cheap way to catch platform-specific breakage.
+          go vet ./...
+          for goos in linux darwin windows; do
+            echo "::group::go vet GOOS=$goos"
+            GOOS=$goos go vet ./...
+            echo "::endgroup::"
+          done
+
+      - name: go.mod / go.sum are tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum \
+            || { echo "::error::go.mod/go.sum not tidy; run 'go mod tidy'"; exit 1; }
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+
+  # ---------------------------------------------------------------------------
+  # Unit tests under the race detector across all three OSes, plus a
+  # forward-compatibility run on the latest Go. Strict sandboxing is *required*
+  # (fail, not skip) on the platforms whose runners provide a mechanism.
+  # ---------------------------------------------------------------------------
+  test:
+    name: test (${{ matrix.os }}, go ${{ matrix.go }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go: ["1.25.x"] # the go.mod floor; keep in sync with GO_FLOOR
+        include:
+          # Forward-compatibility: also run the newest stable Go on Linux.
+          - os: ubuntu-latest
+            go: "stable"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Install bubblewrap (Linux strict sandbox)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
+      - name: Unit tests (race, sandbox enforced)
+        shell: bash
+        env:
+          # Fail sandbox tests (rather than skip) when the mechanism is missing,
+          # on the platforms whose runners supply one: bwrap on Linux,
+          # sandbox-exec on macOS. Windows strict is fail-closed by design (no FS
+          # isolation), so it is deliberately not required here.
+          PMMCP_REQUIRE_SANDBOX: ${{ (runner.os == 'Linux' || runner.os == 'macOS') && '1' || '' }}
+        run: go test -race -count=1 ./...
+
+      - name: Coverage floor (per-package >= 80%)
+        if: runner.os == 'Linux' && matrix.go == '1.25.x'
+        shell: bash
+        run: |
+          go test -cover -count=1 ./internal/... | awk '
+            /coverage: [0-9]/ {
+              # The package path is the field containing "/internal/" (robust to
+              # both "ok <pkg> <time> coverage:.." and "<pkg>  coverage:.." shapes);
+              # the percentage is the token after "coverage:".
+              pkg=""; pct=0
+              for (i=1;i<=NF;i++) {
+                if ($i ~ /\/internal\//) pkg=$i
+                if ($i=="coverage:") { p=$(i+1); sub(/%$/,"",p); pct=p+0 }
+              }
+              if (pkg == "" || pkg ~ /\/internal\/api\/gen/) next   # generated code excluded
+              printf "  %6.1f%%  %s\n", pct, pkg
+              if (pct < 80.0) { bad=1; fails=fails"\n  "pkg" ("pct"%)" }
+            }
+            END {
+              if (bad) { print "\n::error::packages below the 80% coverage floor:"fails; exit 1 }
+              print "\nall covered packages >= 80%"
+            }'
+
+  # ---------------------------------------------------------------------------
+  # Core integration tests that need no container engine (daemon + IPC over a
+  # real socket). The engine suites are excluded and run in their own jobs below.
+  # ---------------------------------------------------------------------------
+  integration:
+    name: integration (core)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Integration tests (no engine)
+        run: go test -tags=integration -race -count=1 -skip '^(TestDocker|TestPodman)' ./test/integration/
+
+  # ---------------------------------------------------------------------------
+  # Docker engine integration. GitHub ubuntu runners ship Docker; require it so
+  # the tests fail (rather than skip) if the daemon is unreachable.
+  # ---------------------------------------------------------------------------
+  integration-docker:
+    name: integration (docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Docker available
+        run: docker version
+
+      - name: Docker integration tests
+        env:
+          PMMCP_REQUIRE_DOCKER: "1"
+        run: go test -tags=integration -race -count=1 -run '^TestDocker' ./test/integration/
+
+  # ---------------------------------------------------------------------------
+  # Podman engine integration. GitHub ubuntu runners ship Podman; require it so
+  # the tests fail (rather than skip) if it is unavailable.
+  # ---------------------------------------------------------------------------
+  integration-podman:
+    name: integration (podman)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Podman available
+        run: podman --version
+
+      - name: Podman integration tests
+        env:
+          PMMCP_REQUIRE_PODMAN: "1"
+        run: go test -tags=integration -race -count=1 -run '^TestPodman' ./test/integration/
+
+  # ---------------------------------------------------------------------------
+  # End-to-end tests: full binaries + MCP handshake, sandboxed.
+  # ---------------------------------------------------------------------------
+  e2e:
+    name: e2e (Linux, sandboxed)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install bubblewrap (Linux strict sandbox)
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
+      - name: E2E tests
+        env:
+          PMMCP_REQUIRE_SANDBOX: "1"
+        run: go test -tags=e2e -race -count=1 ./test/e2e/
+
+  # ---------------------------------------------------------------------------
+  # Cross-compilation for every supported target from one Linux runner. Catches
+  # GOOS/GOARCH-specific build breakage (build-tagged sandbox/service/process
+  # code) without needing a runner per platform.
+  # ---------------------------------------------------------------------------
+  cross-build:
+    name: cross-build (${{ matrix.target.goos }}/${{ matrix.target.goarch }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+          - { goos: darwin, goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+          - { goos: windows, goarch: arm64 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build all packages and both binaries
+        env:
+          GOOS: ${{ matrix.target.goos }}
+          GOARCH: ${{ matrix.target.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          go build ./...
+          go build -o /dev/null ./cmd/pmmcp
+          go build -o /dev/null ./cmd/pmmcpd
+
+  # ---------------------------------------------------------------------------
+  # Apache-2.0 license headers on every first-party Go file (addlicense -check).
+  # Generated code under internal/api/gen/ is excluded; fix locally with
+  # `task license:fix` (or scripts/license-headers.sh fix).
+  # ---------------------------------------------------------------------------
+  license:
+    name: license headers
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: addlicense check
+        env:
+          ADDLICENSE_VERSION: ${{ env.ADDLICENSE_VERSION }}
+        run: bash scripts/license-headers.sh check
+
+  # ---------------------------------------------------------------------------
+  # Vulnerability scan of dependencies and the toolchain.
+  # ---------------------------------------------------------------------------
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }} ./...
+
+  # ---------------------------------------------------------------------------
+  # Protobuf API hygiene: lint and format the source protos.
+  # ---------------------------------------------------------------------------
+  proto:
+    name: proto (buf lint & format)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: buf lint
+        run: buf lint
+
+      - name: buf format is clean
+        run: buf format --diff --exit-code

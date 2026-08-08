@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  pmmcpd — per-user logon Scheduled Task (template).
+
+  Registers without elevation because the task runs as the registering user at
+  LeastPrivilege. Mirrors what `pmmcp install-service` writes to
+  %LOCALAPPDATA%\pmmcp\pmmcpd-logon-task.xml with resolved paths.
+
+  Register:  schtasks /Create /TN pmmcpd /XML pmmcpd-logon-task.xml
+  (or use Register-PmmcpdTask.ps1 in this directory)
+-->
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>pmmcp process manager daemon (per-user, starts at logon)</Description>
+    <URI>\pmmcpd</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <!-- PT0S = no execution time limit: the daemon is long-lived by design. -->
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>3</Count>
+    </RestartOnFailure>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <!-- %LOCALAPPDATA% is expanded by the Task Scheduler service at run time.
+           pmmcpd-start.bat is written there by `pmmcp install-service`. -->
+      <Command>%LOCALAPPDATA%\pmmcp\pmmcpd-start.bat</Command>
+    </Exec>
+  </Actions>
+</Task>

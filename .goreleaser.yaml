@@ -1,0 +1,142 @@
+# GoReleaser configuration for pmmcp (https://goreleaser.com).
+# Validated with `goreleaser check`; releases are cut by .github/workflows/release.yml
+# on a pushed v* tag. Build a local snapshot with `goreleaser release --snapshot --clean`.
+version: 2
+
+project_name: pmmcp
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: pmmcp
+    main: ./cmd/pmmcp
+    binary: pmmcp
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - -s -w
+      - -X github.com/scrothers/pmmcp/internal/version.Version={{ .Version }}
+      - -X github.com/scrothers/pmmcp/internal/version.Commit={{ .FullCommit }}
+      - -X github.com/scrothers/pmmcp/internal/version.BuildDate={{ .CommitDate }}
+
+  - id: pmmcpd
+    main: ./cmd/pmmcpd
+    binary: pmmcpd
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - -s -w
+      - -X github.com/scrothers/pmmcp/internal/version.Version={{ .Version }}
+      - -X github.com/scrothers/pmmcp/internal/version.Commit={{ .FullCommit }}
+      - -X github.com/scrothers/pmmcp/internal/version.BuildDate={{ .CommitDate }}
+
+archives:
+  - id: default
+    # One archive per OS/arch containing both the client and the daemon.
+    ids: [pmmcp, pmmcpd]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE.md
+      - README.md
+      - SECURITY.md
+
+# Linux distro packages, built from the same binaries as the archives. The
+# systemd user unit ships at the packaged-unit path (/usr/lib/systemd/user) so
+# `systemctl --user enable --now pmmcpd` works immediately after install; the
+# postinstall scriptlet only prints that hint — nothing is auto-started, per
+# the product invariant.
+nfpms:
+  - id: packages
+    package_name: pmmcp
+    vendor: Steven Crothers
+    homepage: https://github.com/scrothers/pmmcp
+    maintainer: Steven Crothers <steven@scrothers.com>
+    description: |-
+      Agent-native process supervisor with an MCP control plane.
+      Per-user daemon supervising named, sandboxed, audited processes;
+      pmmcp is the CLI and MCP stdio client, pmmcpd the daemon.
+    license: Apache-2.0
+    section: utils
+    formats: [deb, rpm, apk, archlinux]
+    bindir: /usr/bin
+    contents:
+      - src: packaging/systemd/pmmcpd.service
+        dst: /usr/lib/systemd/user/pmmcpd.service
+      - src: LICENSE.md
+        dst: /usr/share/doc/pmmcp/LICENSE.md
+      - src: README.md
+        dst: /usr/share/doc/pmmcp/README.md
+      - src: SECURITY.md
+        dst: /usr/share/doc/pmmcp/SECURITY.md
+    scripts:
+      postinstall: packaging/nfpm/postinstall.sh
+    rpm:
+      summary: Agent-native process supervisor with an MCP control plane
+    deb:
+      lintian_overrides:
+        # Per-user daemon: shipping a *user* unit without system-service
+        # scaffolding is the design, not an omission.
+        - no-debconf-config
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
+
+# Grouping matches the repo's commit convention (`<subsystem>: <summary>`,
+# imperative, no conventional-commit types) plus Dependabot's configured
+# prefixes (`deps:` for gomod; `ci:` for actions, which is filtered out).
+changelog:
+  sort: asc
+  use: github
+  groups:
+    - title: 🔒 Security & sandboxing
+      regexp: '^(sandbox|secrets?|authz|ipc|webhook|security)\b[^:]*: .+$'
+      order: 0
+    - title: 🐛 Fixes
+      regexp: '^([^:]+: )?fix\b.+$'
+      order: 1
+    - title: 📦 Dependencies
+      regexp: '^deps\b[^:]*: .+$'
+      order: 2
+    - title: 🧰 Everything else
+      order: 999
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^tests?\\b[^:]*: "
+      - "^ci:"
+      - "^chore:"
+      - "^style:"
+      - "^readme\\b"
+      - "(?i)typo"
+      - "Merge pull request"
+      - "Merge branch"
+
+release:
+  draft: false
+  prerelease: auto
+  name_template: "{{ .ProjectName }} {{ .Tag }}"
+  footer: |
+    ---
+    Verify a download against `checksums.txt`. Two binaries per archive:
+    `pmmcpd` (daemon) and `pmmcp` (CLI + MCP client). Install both, keep them
+    in sync, then `pmmcp install-service`. See the docs for setup.

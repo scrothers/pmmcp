@@ -1,0 +1,168 @@
+# ==============================================================================
+# pmmcp .gitignore
+#
+# Sections: project artifacts · Go · OS junk (Linux/macOS/Windows) · editors &
+# IDEs · agent tooling · secrets & env. Patterns are as narrow as safety
+# allows; nothing here should ever mask a file the repo deliberately tracks
+# (testdata fixtures included — none collide today; keep it that way).
+# ==============================================================================
+
+# --- Project build artifacts --------------------------------------------------
+/bin/
+/dist/
+/pmmcp
+/pmmcpd
+*.exe
+*.exe~
+
+# Task (Taskfile.yml) incremental-run fingerprint cache
+.task/
+
+# --- Go -----------------------------------------------------------------------
+# Compiled test binaries (go test -c) and per-package objects
+*.test
+*.o
+*.a
+
+# Coverage: go test -cover / -coverprofile and rendered reports
+*.out
+coverage.*
+covdata/
+covmeta.*
+covcounters.*
+
+# Profiling & tracing: pprof, benchmarks, runtime traces
+*.prof
+*.pprof
+*.trace
+
+# Delve debugger scratch binaries
+__debug_bin*
+
+# Vendored deps are not committed (module cache is the source of truth)
+/vendor/
+
+# Multi-module workspace files are developer-local
+go.work
+go.work.sum
+
+# Go fuzzing: interesting-input corpus discovered locally
+# (seed corpora under testdata/fuzz/ ARE committed — this only hits the cache)
+testdata/fuzz/*/fuzz*
+
+# --- Linux --------------------------------------------------------------------
+# Editor/backup droppings
+*~
+# FUSE placeholders for deleted-but-open files
+.fuse_hidden*
+# KDE Dolphin folder metadata
+.directory
+# Trash folders on removable media / network mounts
+.Trash-*
+# NFS silly-rename files for deleted-but-open handles
+.nfs*
+# Core dumps
+core
+core.[0-9]*
+
+# --- macOS --------------------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+# Resource forks / extended attributes on non-APFS volumes
+._*
+# Volume-root metadata (matters when the repo lives on an external disk)
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+# Directories potentially created on remote AFP shares
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+# Custom folder icons ("Icon" + carriage return; both ? and the literal form)
+Icon?
+
+# --- Windows ------------------------------------------------------------------
+# Explorer thumbnail caches
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+# Folder view configuration
+[Dd]esktop.ini
+# Recycle bin on file shares
+$RECYCLE.BIN/
+# Shortcuts & crash artifacts
+*.lnk
+*.stackdump
+# Windows Installer leftovers
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+
+# --- Editors & IDEs -------------------------------------------------------------
+# JetBrains (GoLand/IntelliJ)
+.idea/
+*.iml
+# VS Code (no shared workspace config in this repo; ignore the whole dir)
+.vscode/
+*.code-workspace
+# Vim / Neovim
+*.swp
+*.swo
+*.swn
+Session.vim
+Sessionx.vim
+.netrwhist
+# Emacs
+\#*\#
+.\#*
+*.elc
+# Sublime Text
+*.sublime-workspace
+# Zed / Fleet / Cursor
+.zed/
+.fleet/
+.cursorignore
+# ctags/etags
+tags
+tags.lock
+tags.temp
+TAGS
+
+# --- Agent tooling --------------------------------------------------------------
+# Claude Code: per-machine settings & memory stay local; shared config
+# (.claude/settings.json, commands, agents) may be committed deliberately.
+.claude/settings.local.json
+CLAUDE.local.md
+# Git worktrees managed by agent harnesses
+.claude/worktrees/
+
+# --- Secrets & environment ------------------------------------------------------
+# Env files: real values never land in git; committed examples are explicit.
+.env
+.env.*
+!.env.example
+!.env.sample
+# Private key material of any provenance
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+id_ecdsa*
+id_ed25519*
+*.agekey
+# SOPS decrypted output convention (docs/secrets.md): keep plaintext out
+*.decrypted.*
+*.plaintext.*

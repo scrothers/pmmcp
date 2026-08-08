@@ -1,0 +1,55 @@
+// Copyright 2026 Steven Crothers
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package sqlite_test
+
+import (
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+)
+
+// TestGoModUsesModerncOnly walks up to go.mod and ensures modernc.org/sqlite
+// is required and mattn/go-sqlite3 is not.
+func TestGoModUsesModerncOnly(t *testing.T) {
+	t.Parallel()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("caller")
+	}
+	dir := filepath.Dir(file)
+	var mod []byte
+	for {
+		p := filepath.Join(dir, "go.mod")
+		b, err := os.ReadFile(p)
+		if err == nil {
+			mod = b
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("go.mod not found")
+		}
+		dir = parent
+	}
+	text := string(mod)
+	if !strings.Contains(text, "modernc.org/sqlite") {
+		t.Fatalf("go.mod missing modernc.org/sqlite:\n%s", text)
+	}
+	if strings.Contains(text, "mattn/go-sqlite3") {
+		t.Fatal("go.mod must not depend on mattn/go-sqlite3")
+	}
+}

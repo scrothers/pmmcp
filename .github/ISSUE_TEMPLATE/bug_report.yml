@@ -1,0 +1,103 @@
+name: 🐛 Bug report
+description: Something behaved wrong — a command, the daemon, the sandbox, or an MCP tool.
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Two notes before you start:
+        - **Security issues do not go here.** Use [private vulnerability reporting](../security/advisories/new) instead — see [SECURITY.md](../blob/main/SECURITY.md).
+        - `pmmcp doctor` and `pmmcp events` answer most "is it me?" questions — their output below saves a round-trip.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+      placeholder: |
+        Ran `pmmcp start --name web -- npm run dev`, expected a running process;
+        got `sandbox_failed` even though bwrap is installed…
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Minimal command sequence that triggers it. Use argv form exactly as typed.
+      render: shell
+      placeholder: |
+        pmmcpd run
+        pmmcp start --name demo -- sleep 3600
+        pmmcp stop demo
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+    validations:
+      required: true
+  - type: dropdown
+    id: sandbox
+    attributes:
+      label: Sandbox profile in effect
+      description: The default is `strict` unless you passed `--sandbox` or set a profile.
+      options:
+        - strict (default)
+        - standard
+        - permissive
+        - "off"
+        - not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - CLI (pmmcp)
+        - Daemon (pmmcpd)
+        - MCP adapter (pmmcp mcp)
+        - Sandboxing
+        - Container driver (podman/docker)
+        - Declarative (pmmcp.yaml / import)
+        - Secrets / redaction
+        - Docs
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of `pmmcp version` and `pmmcp daemon-info` (or the pmmcpd build you run).
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`pmmcp doctor` output"
+      description: Paste it verbatim — it includes the socket path and handshake result.
+      render: shell
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / events / audit excerpt
+      description: |
+        `pmmcp logs <id>`, `pmmcp events`, or daemon stderr. **Redact anything sensitive** —
+        log capture redacts common secret shapes, but check before pasting.
+      render: shell
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: This is not a security vulnerability (those go through private reporting, per SECURITY.md).
+          required: true
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
