@@ -17,13 +17,14 @@ package cli_test
 import (
 	"context"
 	"encoding/json"
-	"net"
 	"path/filepath"
 	"testing"
 
 	"github.com/scrothers/pmmcp/internal/api"
 	pmmcpv1 "github.com/scrothers/pmmcp/internal/api/gen/pmmcp/v1"
 	"github.com/scrothers/pmmcp/internal/cli"
+	"github.com/scrothers/pmmcp/internal/ipc"
+	"github.com/scrothers/pmmcp/internal/testsock"
 	"google.golang.org/grpc"
 )
 
@@ -54,8 +55,8 @@ func (fakeDaemon) Call(_ context.Context, req *pmmcpv1.CallRequest) (*pmmcpv1.Ca
 
 func startDaemon(t *testing.T) string {
 	t.Helper()
-	sock := filepath.Join(t.TempDir(), "d.sock")
-	ln, err := net.Listen("unix", sock)
+	sock := testsock.Path(t)
+	ln, err := ipc.Listen(sock)
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}

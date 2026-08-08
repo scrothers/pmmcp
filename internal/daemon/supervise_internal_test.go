@@ -30,6 +30,7 @@ import (
 	"github.com/scrothers/pmmcp/internal/config"
 	"github.com/scrothers/pmmcp/internal/domain"
 	"github.com/scrothers/pmmcp/internal/event"
+	"github.com/scrothers/pmmcp/internal/testsock"
 	"github.com/scrothers/pmmcp/internal/webhook"
 )
 
@@ -49,7 +50,7 @@ func newSuperviseTestServer(t *testing.T, tweak func(*config.Config)) (*Server, 
 		t.Fatal(err)
 	}
 	cfg.StateDir = filepath.Join(dir, "state")
-	cfg.IPC.Endpoint = filepath.Join(dir, "pmmcpd.sock")
+	cfg.IPC.Endpoint = testsock.Path(t)
 	cfg.Sandbox.Default = "off"
 	cfg.Relaunch.Enabled = false
 	if tweak != nil {
@@ -80,7 +81,7 @@ func newSuperviseTestServerOpts(t *testing.T, tweak func(*config.Config), optsTw
 		t.Fatal(err)
 	}
 	cfg.StateDir = filepath.Join(dir, "state")
-	cfg.IPC.Endpoint = filepath.Join(dir, "pmmcpd.sock")
+	cfg.IPC.Endpoint = testsock.Path(t)
 	cfg.Sandbox.Default = "off"
 	cfg.Relaunch.Enabled = false
 	if tweak != nil {

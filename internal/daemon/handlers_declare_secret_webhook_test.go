@@ -31,6 +31,7 @@ import (
 	"github.com/scrothers/pmmcp/internal/domain"
 	"github.com/scrothers/pmmcp/internal/ipc"
 	"github.com/scrothers/pmmcp/internal/store"
+	"github.com/scrothers/pmmcp/internal/testsock"
 )
 
 // bootServer is a local daemon-boot helper (like newTestDaemonOpts) that also
@@ -39,7 +40,7 @@ import (
 func bootServer(t *testing.T, tweak func(*config.Config)) (*ipc.Client, *daemon.Server) {
 	t.Helper()
 	dir := t.TempDir()
-	sock := filepath.Join(dir, "pmmcpd.sock")
+	sock := testsock.Path(t)
 	cfg, err := config.Load(config.LoadOptions{
 		GOOS: "linux", Home: dir,
 		LookupEnv: func(string) (string, bool) { return "", false },

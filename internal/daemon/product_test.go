@@ -30,12 +30,13 @@ import (
 	"github.com/scrothers/pmmcp/internal/config"
 	"github.com/scrothers/pmmcp/internal/daemon"
 	"github.com/scrothers/pmmcp/internal/ipc"
+	"github.com/scrothers/pmmcp/internal/testsock"
 )
 
 func startTestDaemon(t *testing.T) (context.Context, context.CancelFunc, *ipc.Client, string) {
 	t.Helper()
 	dir := t.TempDir()
-	sock := filepath.Join(dir, "pmmcpd.sock")
+	sock := testsock.Path(t)
 	cfg, err := config.Load(config.LoadOptions{
 		GOOS: "linux", Home: dir,
 		LookupEnv: func(string) (string, bool) { return "", false },
@@ -312,7 +313,7 @@ func TestSandboxRelaxRequiresCapability(t *testing.T) {
 	t.Parallel()
 	// Rebuild daemon with strict default; agent role lacks CapSandboxRelax.
 	dir := t.TempDir()
-	sock := filepath.Join(dir, "pmmcpd.sock")
+	sock := testsock.Path(t)
 	cfg, err := config.Load(config.LoadOptions{
 		GOOS: "linux", Home: dir,
 		LookupEnv: func(string) (string, bool) { return "", false },

@@ -22,6 +22,7 @@ import (
 
 	"github.com/scrothers/pmmcp/internal/config"
 	"github.com/scrothers/pmmcp/internal/daemon"
+	"github.com/scrothers/pmmcp/internal/testsock"
 )
 
 func TestStateDirMode0700(t *testing.T) {
@@ -35,7 +36,7 @@ func TestStateDirMode0700(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.StateDir = filepath.Join(dir, "state")
-	cfg.IPC.Endpoint = filepath.Join(dir, "s.sock")
+	cfg.IPC.Endpoint = testsock.Path(t)
 	cfg.Sandbox.Default = "off"
 	cfg.Relaunch.Enabled = false
 	ctx := context.Background()

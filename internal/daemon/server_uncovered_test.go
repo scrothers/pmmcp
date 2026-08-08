@@ -40,6 +40,7 @@ import (
 	"github.com/scrothers/pmmcp/internal/process"
 	"github.com/scrothers/pmmcp/internal/store"
 	"github.com/scrothers/pmmcp/internal/store/sqlite"
+	"github.com/scrothers/pmmcp/internal/testsock"
 )
 
 // dialDaemon boots srv's IPC listener in the background and returns a
@@ -84,7 +85,7 @@ func TestRelaunchEligibleSkipsAlreadyRunningUnderManager(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	cfg := newTestConfig(t, dir)
-	sock := filepath.Join(dir, "d.sock")
+	sock := testsock.Path(t)
 	cfg.IPC.Endpoint = sock
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -126,7 +127,7 @@ func TestRelaunchEligibleAdoptsLivePredecessor(t *testing.T) {
 	dbPath := filepath.Join(dir, "db.sqlite")
 
 	cfg1 := newTestConfig(t, dir)
-	cfg1.IPC.Endpoint = filepath.Join(dir, "d1.sock")
+	cfg1.IPC.Endpoint = testsock.Path(t)
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	srv1, err := daemon.New(ctx1, daemon.Options{Config: cfg1, DBPath: dbPath})
 	if err != nil {
@@ -150,7 +151,7 @@ func TestRelaunchEligibleAdoptsLivePredecessor(t *testing.T) {
 	})
 
 	cfg2 := newTestConfig(t, dir)
-	cfg2.IPC.Endpoint = filepath.Join(dir, "d2.sock")
+	cfg2.IPC.Endpoint = testsock.Path(t)
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	t.Cleanup(cancel2)
 	srv2, err := daemon.New(ctx2, daemon.Options{Config: cfg2, DBPath: dbPath})
@@ -180,7 +181,7 @@ func TestRelaunchEligibleRestartsDeadPredecessor(t *testing.T) {
 	dbPath := filepath.Join(dir, "db.sqlite")
 
 	cfg1 := newTestConfig(t, dir)
-	cfg1.IPC.Endpoint = filepath.Join(dir, "d1.sock")
+	cfg1.IPC.Endpoint = testsock.Path(t)
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	srv1, err := daemon.New(ctx1, daemon.Options{Config: cfg1, DBPath: dbPath})
 	if err != nil {
@@ -206,7 +207,7 @@ func TestRelaunchEligibleRestartsDeadPredecessor(t *testing.T) {
 	_ = srv1.Close()
 
 	cfg2 := newTestConfig(t, dir)
-	cfg2.IPC.Endpoint = filepath.Join(dir, "d2.sock")
+	cfg2.IPC.Endpoint = testsock.Path(t)
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	t.Cleanup(cancel2)
 	srv2, err := daemon.New(ctx2, daemon.Options{Config: cfg2, DBPath: dbPath})
@@ -238,7 +239,7 @@ func TestRelaunchEligibleRestartFailureMarksFailed(t *testing.T) {
 	}
 
 	cfg1 := newTestConfig(t, dir)
-	cfg1.IPC.Endpoint = filepath.Join(dir, "d1.sock")
+	cfg1.IPC.Endpoint = testsock.Path(t)
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	srv1, err := daemon.New(ctx1, daemon.Options{Config: cfg1, DBPath: dbPath})
 	if err != nil {
@@ -268,7 +269,7 @@ func TestRelaunchEligibleRestartFailureMarksFailed(t *testing.T) {
 	}
 
 	cfg2 := newTestConfig(t, dir)
-	cfg2.IPC.Endpoint = filepath.Join(dir, "d2.sock")
+	cfg2.IPC.Endpoint = testsock.Path(t)
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	t.Cleanup(cancel2)
 	srv2, err := daemon.New(ctx2, daemon.Options{Config: cfg2, DBPath: dbPath})
@@ -303,7 +304,7 @@ func newTestConfig(t *testing.T, dir string) *config.Config {
 		t.Fatal(err)
 	}
 	cfg.StateDir = filepath.Join(dir, "state")
-	cfg.IPC.Endpoint = filepath.Join(dir, "pmmcpd.sock")
+	cfg.IPC.Endpoint = testsock.Path(t)
 	cfg.Sandbox.Default = "off"
 	cfg.Relaunch.Enabled = false
 	return cfg
@@ -638,7 +639,7 @@ func TestDoStartListScanFindsRecordFromPriorProcess(t *testing.T) {
 	dbPath := filepath.Join(dir, "db.sqlite")
 
 	cfg1 := newTestConfig(t, dir)
-	cfg1.IPC.Endpoint = filepath.Join(dir, "d1.sock")
+	cfg1.IPC.Endpoint = testsock.Path(t)
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	srv1, err := daemon.New(ctx1, daemon.Options{Config: cfg1, DBPath: dbPath})
 	if err != nil {
@@ -659,7 +660,7 @@ func TestDoStartListScanFindsRecordFromPriorProcess(t *testing.T) {
 	// start with the same (project, name, profile) must fall through to the
 	// store.List scan and find the still-non-terminal record from srv1.
 	cfg2 := newTestConfig(t, dir)
-	cfg2.IPC.Endpoint = filepath.Join(dir, "d2.sock")
+	cfg2.IPC.Endpoint = testsock.Path(t)
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	t.Cleanup(cancel2)
 	srv2, err := daemon.New(ctx2, daemon.Options{Config: cfg2, DBPath: dbPath})
@@ -1092,7 +1093,7 @@ func TestResolveIDByNameFindsTerminalPredecessorAcrossRestart(t *testing.T) {
 	dbPath := filepath.Join(dir, "db.sqlite")
 
 	cfg1 := newTestConfig(t, dir)
-	cfg1.IPC.Endpoint = filepath.Join(dir, "d1.sock")
+	cfg1.IPC.Endpoint = testsock.Path(t)
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	srv1, err := daemon.New(ctx1, daemon.Options{Config: cfg1, DBPath: dbPath})
 	if err != nil {
@@ -1115,7 +1116,7 @@ func TestResolveIDByNameFindsTerminalPredecessorAcrossRestart(t *testing.T) {
 	// matching record is the terminal one from srv1, which must still resolve
 	// (not error) via the final `return list[0].ID, list[0], nil` fallback.
 	cfg2 := newTestConfig(t, dir)
-	cfg2.IPC.Endpoint = filepath.Join(dir, "d2.sock")
+	cfg2.IPC.Endpoint = testsock.Path(t)
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	t.Cleanup(cancel2)
 	srv2, err := daemon.New(ctx2, daemon.Options{Config: cfg2, DBPath: dbPath})
@@ -1142,7 +1143,7 @@ func TestDoStopManagerErrNotFoundAcrossRestart(t *testing.T) {
 	dbPath := filepath.Join(dir, "db.sqlite")
 
 	cfg1 := newTestConfig(t, dir)
-	cfg1.IPC.Endpoint = filepath.Join(dir, "d1.sock")
+	cfg1.IPC.Endpoint = testsock.Path(t)
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	srv1, err := daemon.New(ctx1, daemon.Options{Config: cfg1, DBPath: dbPath})
 	if err != nil {
@@ -1164,7 +1165,7 @@ func TestDoStopManagerErrNotFoundAcrossRestart(t *testing.T) {
 	})
 
 	cfg2 := newTestConfig(t, dir)
-	cfg2.IPC.Endpoint = filepath.Join(dir, "d2.sock")
+	cfg2.IPC.Endpoint = testsock.Path(t)
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	t.Cleanup(cancel2)
 	srv2, err := daemon.New(ctx2, daemon.Options{Config: cfg2, DBPath: dbPath})
@@ -1524,7 +1525,7 @@ func TestListenAndServeRelaunchFailureAudited(t *testing.T) {
 	}
 
 	cfg1 := newTestConfig(t, dir)
-	cfg1.IPC.Endpoint = filepath.Join(dir, "d1.sock")
+	cfg1.IPC.Endpoint = testsock.Path(t)
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	srv1, err := daemon.New(ctx1, daemon.Options{Config: cfg1, DBPath: dbPath})
 	if err != nil {
@@ -1573,7 +1574,7 @@ func TestListenAndServeRelaunchFailureAudited(t *testing.T) {
 	}
 
 	cfg2 := newTestConfig(t, dir)
-	cfg2.IPC.Endpoint = filepath.Join(dir, "d2.sock")
+	cfg2.IPC.Endpoint = testsock.Path(t)
 	cfg2.Relaunch.Enabled = true
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	t.Cleanup(cancel2)

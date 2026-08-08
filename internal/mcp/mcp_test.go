@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,7 +26,9 @@ import (
 	"github.com/scrothers/pmmcp/internal/api"
 	pmmcpv1 "github.com/scrothers/pmmcp/internal/api/gen/pmmcp/v1"
 	"github.com/scrothers/pmmcp/internal/domain"
+	"github.com/scrothers/pmmcp/internal/ipc"
 	"github.com/scrothers/pmmcp/internal/mcp"
+	"github.com/scrothers/pmmcp/internal/testsock"
 	"google.golang.org/grpc"
 )
 
@@ -72,8 +73,8 @@ func (fakeDaemon) Call(_ context.Context, req *pmmcpv1.CallRequest) (*pmmcpv1.Ca
 
 func startFakeDaemon(t *testing.T) string {
 	t.Helper()
-	sock := filepath.Join(t.TempDir(), "d.sock")
-	ln, err := net.Listen("unix", sock)
+	sock := testsock.Path(t)
+	ln, err := ipc.Listen(sock)
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
@@ -102,8 +103,8 @@ func (d flakyDaemon) Call(ctx context.Context, req *pmmcpv1.CallRequest) (*pmmcp
 
 func startFlakyDaemon(t *testing.T, fail map[string]bool) string {
 	t.Helper()
-	sock := filepath.Join(t.TempDir(), "flaky.sock")
-	ln, err := net.Listen("unix", sock)
+	sock := testsock.Path(t)
+	ln, err := ipc.Listen(sock)
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
@@ -223,7 +224,7 @@ func TestListResourcesDaemonUp(t *testing.T) {
 
 func TestListResourcesDaemonDown(t *testing.T) {
 	t.Parallel()
-	sock := filepath.Join(t.TempDir(), "absent.sock")
+	sock := testsock.Path(t)
 	res, err := mcp.ListResources(context.Background(), sock)
 	if err == nil {
 		t.Fatal("want daemon-down error, got nil")
@@ -269,7 +270,7 @@ func TestResourceTemplates(t *testing.T) {
 
 func TestReadResourceDaemonDialError(t *testing.T) {
 	t.Parallel()
-	sock := filepath.Join(t.TempDir(), "absent.sock")
+	sock := testsock.Path(t)
 	_, err := mcp.ReadResource(context.Background(), sock, "pmmcp://processes")
 	if err == nil {
 		t.Fatal("want dial error, got nil")

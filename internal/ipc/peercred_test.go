@@ -19,16 +19,15 @@ package ipc_test
 import (
 	"net"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/scrothers/pmmcp/internal/ipc"
+	"github.com/scrothers/pmmcp/internal/testsock"
 )
 
 func TestPeerUIDSameUser(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	sock := filepath.Join(dir, "t.sock")
+	sock := testsock.Path(t)
 	ln, err := ipc.Listen(sock)
 	if err != nil {
 		t.Fatal(err)
@@ -89,8 +88,7 @@ func TestPeerUIDZeroValueConn(t *testing.T) {
 
 func TestPeerUIDClosedConn(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	sock := filepath.Join(dir, "closed.sock")
+	sock := testsock.Path(t)
 	ln, err := ipc.Listen(sock)
 	if err != nil {
 		t.Fatal(err)
