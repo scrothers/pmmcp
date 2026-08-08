@@ -20,10 +20,10 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# Least privilege at the workflow level; the goreleaser job elevates only the
+# scopes it needs (Scorecard TokenPermissions).
 permissions:
-  contents: write # create the GitHub Release and upload the built assets
-  id-token: write # sign the provenance attestation (Sigstore OIDC)
-  attestations: write # store the attestation via the GitHub attestations API
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -34,6 +34,10 @@ jobs:
     name: goreleaser
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write # create the GitHub Release and upload the built assets
+      id-token: write # sign the provenance attestation (Sigstore OIDC)
+      attestations: write # store the attestation via the GitHub attestations API
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
