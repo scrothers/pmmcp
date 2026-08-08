@@ -45,7 +45,7 @@ func TestStartRegistersResolvedSecretForRedaction(t *testing.T) {
 	var start api.StartResult
 	if err := c.Call(ctx, api.MethodStart, api.StartPayload{
 		Name:    "svc",
-		Command: []string{"/bin/true"},
+		Command: []string{"true"},
 		Env:     map[string]string{"TOKEN": "secret://env:PMMCP_TEST_SECRET_SRC"},
 		Sandbox: "off",
 	}, &start); err != nil {

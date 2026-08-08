@@ -53,11 +53,20 @@ func TestInstallServiceResolveError(t *testing.T) {
 	}
 }
 
+// unsetHome clears every env var os.UserHomeDir consults on any of our
+// supported GOOS (HOME on unix/darwin, USERPROFILE on windows), so a test
+// forcing a home-resolution error gets that error on every CI platform.
+func unsetHome(t *testing.T) {
+	t.Helper()
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+}
+
 // TestInstallServiceInstallError covers installService's service.Install
 // error branch: an unset $HOME makes the linux/darwin drivers fail to
 // resolve a home directory.
 func TestInstallServiceInstallError(t *testing.T) {
-	t.Setenv("HOME", "")
+	unsetHome(t)
 	t.Setenv("LOCALAPPDATA", "")
 	err := installService(context.Background(), "/usr/local/bin/pmmcpd")
 	if err == nil {
@@ -68,7 +77,7 @@ func TestInstallServiceInstallError(t *testing.T) {
 // TestUninstallServiceError covers uninstallService's service.Uninstall
 // error branch.
 func TestUninstallServiceError(t *testing.T) {
-	t.Setenv("HOME", "")
+	unsetHome(t)
 	t.Setenv("LOCALAPPDATA", "")
 	if err := uninstallService(context.Background()); err == nil {
 		t.Fatal("want service.Uninstall error when $HOME is unset")

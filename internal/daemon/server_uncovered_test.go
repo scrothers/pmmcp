@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"syscall"
 	"testing"
@@ -61,7 +62,10 @@ func dialDaemon(ctx context.Context, t *testing.T, srv *daemon.Server, sock stri
 	if c == nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { _ = c.Close() })
+	t.Cleanup(func() {
+		stopAllForTest(ctx, t, c)
+		_ = c.Close()
+	})
 	return c
 }
 
@@ -231,6 +235,9 @@ func TestRelaunchEligibleRestartsDeadPredecessor(t *testing.T) {
 
 func TestRelaunchEligibleRestartFailureMarksFailed(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("execs a #!/bin/sh script directly; shebang exec is POSIX-only")
+	}
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "db.sqlite")
 	script := filepath.Join(dir, "run.sh")
@@ -318,6 +325,12 @@ func TestNewNilConfig(t *testing.T) {
 }
 
 func TestNewStateDirMkdirAllFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// os.Mkdir(..., 0o500) doesn't block directory-content creation on
+		// Windows (no POSIX write-bit enforcement), so New() would unexpectedly
+		// succeed here — and its *Server would leak (this test discards it).
+		t.Skip("POSIX permission bits aren't enforced by Windows ACLs")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses directory write permission checks")
 	}
@@ -1238,6 +1251,9 @@ func TestDoRestartIDGenerationFailure(t *testing.T) {
 }
 
 func TestDoRestartLogDirMkdirAllFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits aren't enforced by Windows ACLs")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses directory write permission checks")
 	}
@@ -1274,6 +1290,9 @@ func TestDoRestartLogDirMkdirAllFails(t *testing.T) {
 
 func TestDoRestartManagerStartFails(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("execs a #!/bin/sh script directly; shebang exec is POSIX-only")
+	}
 	dir := t.TempDir()
 	script := filepath.Join(dir, "restart-run.sh")
 	if err := os.WriteFile(script, []byte("#!/bin/sh\nsleep 5\n"), 0o755); err != nil {
@@ -1471,7 +1490,7 @@ func TestDoLogsMinLevelFilter(t *testing.T) {
 	ctx, _, c, _ := startTestDaemon(t)
 	var start api.StartResult
 	if err := c.Call(ctx, api.MethodStart, api.StartPayload{
-		Name: "loglevel", Command: []string{"/bin/sh", "-c", `echo '{"level":"error","msg":"boom"}'; sleep 2`},
+		Name: "loglevel", Command: []string{"sh", "-c", `echo '{"level":"error","msg":"boom"}'; sleep 2`},
 	}, &start); err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -1517,6 +1536,9 @@ func TestListenAndServeListenError(t *testing.T) {
 
 func TestListenAndServeRelaunchFailureAudited(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("execs a #!/bin/sh script directly; shebang exec is POSIX-only")
+	}
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "db.sqlite")
 	script := filepath.Join(dir, "boot-run.sh")

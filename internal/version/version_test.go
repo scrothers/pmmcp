@@ -80,6 +80,10 @@ func main() { fmt.Print(version.String()) }
 		"-X " + pkg + ".BuildDate=2026-01-02",
 	}, " ")
 	bin := filepath.Join(tmp, "ldflagcheck")
+	if runtime.GOOS == "windows" {
+		// go build appends .exe to an extension-less -o target on windows.
+		bin += ".exe"
+	}
 
 	build := exec.Command("go", "build", "-ldflags", ldflags, "-o", bin, ".")
 	build.Dir = tmp

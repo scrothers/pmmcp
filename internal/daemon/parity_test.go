@@ -45,7 +45,10 @@ func TestAllMethodsDispatched(t *testing.T) {
 			t.Errorf("method %s unknown: %v", m, err)
 		}
 	}
-	_ = c.Call(ctx, api.MethodStop, map[string]any{"id": startID, "timeout_sec": 2}, &map[string]any{})
+	// AllMethods includes start/run variants that spawn extra processes beyond
+	// startID; sweep everything so none are still alive (holding a log file
+	// open) when t.TempDir's cleanup runs — see stopAllForTest.
+	stopAllForTest(ctx, t, c)
 }
 
 // TestCoreMethodsSucceed requires real success on the product path for key tools.

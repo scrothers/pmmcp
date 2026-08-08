@@ -20,6 +20,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -342,6 +343,13 @@ func TestReadResourceProcessLogByName(t *testing.T) {
 // Mutates process-global working directory state, so it cannot run in
 // parallel with other tests that depend on cwd.
 func TestReadDeclareGetwdError(t *testing.T) {
+	// Deleting the cwd out from under the process only reliably fails a
+	// subsequent os.Getwd() on Linux; macOS's getcwd() can still resolve a
+	// path after the directory is unlinked, so readDeclare falls through to
+	// its ordinary not-found branch instead.
+	if runtime.GOOS != "linux" {
+		t.Skip("os.Getwd() after cwd deletion is Linux-specific")
+	}
 	dir := t.TempDir()
 	t.Chdir(dir)
 	if err := os.RemoveAll(dir); err != nil {

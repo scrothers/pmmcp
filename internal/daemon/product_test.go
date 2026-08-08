@@ -22,6 +22,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -78,8 +79,31 @@ func startTestDaemon(t *testing.T) (context.Context, context.CancelFunc, *ipc.Cl
 	if c == nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = c.Close() })
+	t.Cleanup(func() {
+		stopAllForTest(ctx, t, c)
+		_ = c.Close()
+	})
 	return ctx, cancel, c, dir
+}
+
+// stopAllForTest force-stops every process still known to the daemon and
+// waits (via the synchronous Force stop path) for each to actually exit.
+// Server.Close cancels the daemon's run context but does not stop managed
+// child processes or wait for background goroutines before returning, so a
+// test that leaves a "sleep"-style process running would otherwise still
+// have it alive when t.TempDir's cleanup runs next. POSIX allows unlinking a
+// file an unrelated process still has open, so this race is invisible on
+// Linux/macOS; Windows refuses to delete an open file, so the orphaned
+// child's log handle turns into a "used by another process" cleanup failure.
+func stopAllForTest(ctx context.Context, t *testing.T, c *ipc.Client) {
+	t.Helper()
+	var list []api.ProcessView
+	if err := c.Call(ctx, api.MethodList, api.ListPayload{All: true, IncludeExited: false}, &list); err != nil {
+		return
+	}
+	for _, p := range list {
+		_ = c.Call(ctx, api.MethodStop, api.IDPayload{ID: p.ID, Force: true}, &map[string]any{})
+	}
 }
 
 func TestProductAutoRestart(t *testing.T) {
@@ -88,7 +112,7 @@ func TestProductAutoRestart(t *testing.T) {
 	// Process exits immediately; auto_restart should bring it back.
 	var start api.StartResult
 	if err := c.Call(ctx, api.MethodStart, api.StartPayload{
-		Name: "once", Command: []string{"/bin/true"}, Sandbox: "off", AutoRestart: true,
+		Name: "once", Command: []string{"true"}, Sandbox: "off", AutoRestart: true,
 	}, &start); err != nil {
 		t.Fatal(err)
 	}
@@ -480,6 +504,11 @@ func TestDaemonInfoRedactsToken(t *testing.T) {
 }
 
 func TestForceStopIgnoresSIGTERMTrap(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Windows has no POSIX signal delivery for a shell to trap: there is
+		// no SIGTERM to ignore, so this scenario doesn't exist on the platform.
+		t.Skip("SIGTERM trapping is POSIX-only")
+	}
 	t.Parallel()
 	ctx, _, c, _ := startTestDaemon(t)
 	// Trap SIGTERM and keep sleeping — grace stop would hang; force must win.
@@ -604,6 +633,12 @@ func TestStartEnvKeysNoValues(t *testing.T) {
 
 func TestPortsDiscovered(t *testing.T) {
 	t.Parallel()
+	// ports.DiscoverListeningPorts is a documented Linux-only /proc-based
+	// mechanism (internal/ports/discover_other.go is a no-op elsewhere), so
+	// status.discovered has nothing to report on other platforms.
+	if runtime.GOOS != "linux" {
+		t.Skip("port discovery is Linux-only")
+	}
 	ctx, _, c, _ := startTestDaemon(t)
 	// Listen via python/nc-free shell: use a tiny Go-less approach — `sleep` won't listen.
 	// Start a process that binds a port with pure bash /dev/tcp is not a server.

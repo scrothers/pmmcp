@@ -16,6 +16,7 @@ package declare_test
 
 import (
 	"errors"
+	"runtime"
 	"slices"
 	"testing"
 
@@ -435,6 +436,16 @@ func TestShellRiskArgvVariants(t *testing.T) {
 
 func TestWatchPathOutsideProjectVariants(t *testing.T) {
 	t.Parallel()
+	// pathOutsideProject treats a path as absolute via filepath.IsAbs, which
+	// requires a drive letter on windows — unix-style "/etc/passwd" style
+	// literals are not absolute there, so use OS-native absolute paths.
+	absOutside := "/etc/passwd"
+	absPath := "/abs/path"
+	if runtime.GOOS == "windows" {
+		absOutside = `C:\Windows\System32\drivers\etc\hosts`
+		absPath = `C:\abs\path`
+	}
+
 	cases := []struct {
 		name    string
 		root    string // "" means no WithProjectRoot option is passed
@@ -444,8 +455,8 @@ func TestWatchPathOutsideProjectVariants(t *testing.T) {
 		{"blank-path-ignored", "", "   ", false},
 		{"relative-escaping-no-root", "", "../secret", true},
 		{"relative-clean-no-root", "", "./config", false},
-		{"absolute-no-root", "", "/etc/passwd", true},
-		{"relative-root-absolute-path-errors", "relative/root", "/abs/path", true},
+		{"absolute-no-root", "", absOutside, true},
+		{"relative-root-absolute-path-errors", "relative/root", absPath, true},
 		{"root-contains-path", "/proj", "internal/pkg", false},
 		{"root-escaping-path", "/proj", "../outside", true},
 	}

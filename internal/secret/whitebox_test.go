@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -110,12 +111,19 @@ func TestResolveSOPSViaFakeDecrypt(t *testing.T) {
 		return []byte("db: test-secret-do-not-use\n"), nil
 	}
 
-	v, err := Resolve("secret://sops:/fake/whatever.enc.yaml", ResolveOptions{AllowFileOutsideProject: true})
+	// resolvePath requires filepath.IsAbs, which needs a drive letter on
+	// windows — a unix-style "/fake/..." literal is not absolute there.
+	fakePath := "/fake/whatever.enc.yaml"
+	if runtime.GOOS == "windows" {
+		fakePath = `C:\fake\whatever.enc.yaml`
+	}
+
+	v, err := Resolve("secret://sops:"+fakePath, ResolveOptions{AllowFileOutsideProject: true})
 	if err != nil || v != "db: test-secret-do-not-use" {
 		t.Fatalf("sops no-key resolve: %q %v", v, err)
 	}
 
-	v, err = Resolve("secret://sops:/fake/whatever.enc.yaml#db", ResolveOptions{AllowFileOutsideProject: true})
+	v, err = Resolve("secret://sops:"+fakePath+"#db", ResolveOptions{AllowFileOutsideProject: true})
 	if err != nil || v != "test-secret-do-not-use" {
 		t.Fatalf("sops keyed resolve: %q %v", v, err)
 	}

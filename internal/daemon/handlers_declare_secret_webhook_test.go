@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -76,7 +77,10 @@ func bootServer(t *testing.T, tweak func(*config.Config)) (*ipc.Client, *daemon.
 	if c == nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { _ = c.Close() })
+	t.Cleanup(func() {
+		stopAllForTest(ctx, t, c)
+		_ = c.Close()
+	})
 	return c, srv
 }
 
@@ -189,7 +193,8 @@ func TestDoDeclareDiff_LoadError(t *testing.T) {
 func TestDoDeclareDiff_StoreListError(t *testing.T) {
 	t.Parallel()
 	c, srv := bootServer(t, nil)
-	daemon.SetStoreForTest(srv, failingStore{})
+	prevStore := daemon.SetStoreForTest(srv, failingStore{})
+	t.Cleanup(func() { _ = prevStore.Close() })
 	ctx := context.Background()
 	yaml := declareYAML("services:\n  web:\n    argv: [\"sleep\", \"1\"]\n")
 	var out map[string]any
@@ -277,7 +282,8 @@ func TestDoDeclareApply_StoreListError(t *testing.T) {
 	t.Parallel()
 	c, srv := bootServer(t, nil)
 	c.SetSession("s1", "full")
-	daemon.SetStoreForTest(srv, failingStore{})
+	prevStore := daemon.SetStoreForTest(srv, failingStore{})
+	t.Cleanup(func() { _ = prevStore.Close() })
 
 	ctx := context.Background()
 	yaml := declareYAML("services:\n  web:\n    argv: [\"sleep\", \"1\"]\n")
@@ -775,6 +781,9 @@ func TestDoLogsExport_MkdirAllFails(t *testing.T) {
 }
 
 func TestDoLogsExport_OpenFileFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits aren't enforced by Windows ACLs")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses directory write permission checks")
 	}
@@ -1017,7 +1026,8 @@ func TestDoSecretSet_KeyringSetInvalidName(t *testing.T) {
 func TestDoMetrics_StoreListError(t *testing.T) {
 	t.Parallel()
 	c, srv := bootServer(t, nil)
-	daemon.SetStoreForTest(srv, failingStore{})
+	prevStore := daemon.SetStoreForTest(srv, failingStore{})
+	t.Cleanup(func() { _ = prevStore.Close() })
 	ctx := context.Background()
 	var out map[string]any
 	if err := c.Call(ctx, api.MethodMetrics, nil, &out); err == nil {
@@ -1052,6 +1062,9 @@ func TestDoLogsExport_ExportTarGzFails(t *testing.T) {
 // --- doLogsShip (OpenFile generic failure, not os.ErrExist) ---
 
 func TestDoLogsShip_SinkOpenFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits aren't enforced by Windows ACLs")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses directory write permission checks")
 	}

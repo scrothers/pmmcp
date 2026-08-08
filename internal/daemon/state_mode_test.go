@@ -18,6 +18,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/scrothers/pmmcp/internal/config"
@@ -26,6 +27,11 @@ import (
 )
 
 func TestStateDirMode0700(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// os.FileMode.Perm() on Windows is synthesized (no POSIX permission
+		// bits), so this always reports 0777 for a directory regardless of ACLs.
+		t.Skip("POSIX permission bits aren't meaningful on Windows")
+	}
 	t.Parallel()
 	dir := t.TempDir()
 	cfg, err := config.Load(config.LoadOptions{

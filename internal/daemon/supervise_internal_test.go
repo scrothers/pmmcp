@@ -30,9 +30,29 @@ import (
 	"github.com/scrothers/pmmcp/internal/config"
 	"github.com/scrothers/pmmcp/internal/domain"
 	"github.com/scrothers/pmmcp/internal/event"
+	"github.com/scrothers/pmmcp/internal/store"
 	"github.com/scrothers/pmmcp/internal/testsock"
 	"github.com/scrothers/pmmcp/internal/webhook"
 )
+
+// stopAllSuperviseForTest force-stops every process this white-box server
+// still has recorded and waits (via the short-timeout force path) for each
+// to actually exit. Server.Close cancels the run context but never stops
+// managed children or waits for background loops before returning, so an
+// orphaned "sleep"-style process can still be alive — with its log file
+// still open — when t.TempDir's cleanup runs right after. POSIX allows
+// unlinking a file another process still has open; Windows does not, so
+// there this turns into a "used by another process" cleanup failure.
+func stopAllSuperviseForTest(ctx context.Context, t *testing.T, s *Server) {
+	t.Helper()
+	list, err := s.store.List(ctx, store.ProcessFilter{})
+	if err != nil {
+		return
+	}
+	for _, rec := range list {
+		_ = s.mgr.Stop(ctx, rec.ID, time.Millisecond)
+	}
+}
 
 // newSuperviseTestServer builds a real *Server (real local process manager, real
 // SQLite-backed store/audit/events) for whitebox tests that need direct access
@@ -63,6 +83,7 @@ func newSuperviseTestServer(t *testing.T, tweak func(*config.Config)) (*Server, 
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = srv.Close() })
+	t.Cleanup(func() { stopAllSuperviseForTest(ctx, t, srv) })
 	return srv, ctx
 }
 
@@ -98,6 +119,7 @@ func newSuperviseTestServerOpts(t *testing.T, tweak func(*config.Config), optsTw
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = srv.Close() })
+	t.Cleanup(func() { stopAllSuperviseForTest(ctx, t, srv) })
 	return srv, ctx
 }
 
@@ -130,7 +152,7 @@ func TestProbeRunningHealthyProcessNotFound(t *testing.T) {
 func TestProbeRunningHealthyTerminalStatus(t *testing.T) {
 	t.Parallel()
 	s, ctx := newSuperviseTestServer(t, nil)
-	res := startSuperviseProcess(ctx, t, s, api.StartPayload{Name: "quick", Command: []string{"/bin/true"}, Sandbox: "off"})
+	res := startSuperviseProcess(ctx, t, s, api.StartPayload{Name: "quick", Command: []string{"true"}, Sandbox: "off"})
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		h, err := s.mgr.Inspect(ctx, res.ID)
@@ -244,7 +266,9 @@ func TestRunAutoRestartLoopRestartsExitedProcess(t *testing.T) {
 	s.autoRestartTick = 20 * time.Millisecond
 	s.autoRestartBackoff = time.Millisecond
 	res := startSuperviseProcess(ctx, t, s, api.StartPayload{
-		Name: "flappy", Command: []string{"/bin/sh", "-c", "exit 1"}, Sandbox: "off", AutoRestart: true,
+		// "sh" resolves via PATH on every CI platform (Git for Windows ships
+		// sh.exe); a hardcoded /bin/sh path doesn't exist on Windows.
+		Name: "flappy", Command: []string{"sh", "-c", "exit 1"}, Sandbox: "off", AutoRestart: true,
 	})
 
 	loopCtx, cancel := context.WithCancel(ctx)
@@ -332,7 +356,7 @@ func TestRunAutoRestartLoopStopsRestartingAtMax(t *testing.T) {
 		o.AutoRestartTick = 50 * time.Millisecond
 	})
 	res := startSuperviseProcess(ctx, t, s, api.StartPayload{
-		Name: "always-fails", Command: []string{"/bin/sh", "-c", "exit 1"}, Sandbox: "off", AutoRestart: true,
+		Name: "always-fails", Command: []string{"sh", "-c", "exit 1"}, Sandbox: "off", AutoRestart: true,
 	})
 
 	loopCtx, cancel := context.WithCancel(ctx)
@@ -727,9 +751,11 @@ func TestPidAliveLiveProcess(t *testing.T) {
 
 func TestPidAliveDeadProcess(t *testing.T) {
 	t.Parallel()
-	cmd := exec.Command("/bin/true")
+	// "true" is resolved via PATH: it lives at /bin/true on Linux but
+	// /usr/bin/true on macOS, so a hardcoded path isn't portable.
+	cmd := exec.Command("true")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("run /bin/true: %v", err)
+		t.Fatalf("run true: %v", err)
 	}
 	pid := cmd.Process.Pid
 	if pidAlive(pid) {

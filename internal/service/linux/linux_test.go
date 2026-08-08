@@ -24,10 +24,26 @@ import (
 	"github.com/scrothers/pmmcp/internal/service/linux"
 )
 
+// setHome sets HOME and USERPROFILE to dir, and unsetHome clears both — the
+// linux driver calls os.UserHomeDir, which on windows consults USERPROFILE
+// instead of HOME, so tests exercising the home-resolution branches must
+// control both env vars to behave consistently across CI platforms.
+func setHome(t *testing.T, dir string) {
+	t.Helper()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+}
+
+func unsetHome(t *testing.T) {
+	t.Helper()
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+}
+
 func TestInstallUninstall(t *testing.T) {
 	// Mutates HOME — not parallel.
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 
 	ctx := context.Background()
 	pmmcpd := "/usr/local/bin/pmmcpd"
@@ -60,7 +76,7 @@ func TestInstallUninstall(t *testing.T) {
 }
 
 func TestInstallEmptyPath(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setHome(t, t.TempDir())
 	err := linux.Install(context.Background(), "")
 	if err == nil {
 		t.Fatal("want error for empty path")
@@ -69,7 +85,7 @@ func TestInstallEmptyPath(t *testing.T) {
 
 func TestInstallPathWithSpacesAndPercent(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	pmmcpd := "/home/u/My Tools/100%pmmcpd"
 	if err := linux.Install(context.Background(), pmmcpd); err != nil {
 		t.Fatalf("Install: %v", err)
@@ -87,7 +103,7 @@ func TestInstallPathWithSpacesAndPercent(t *testing.T) {
 
 func TestUnitPath(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	p, err := linux.UnitPath()
 	if err != nil {
 		t.Fatalf("UnitPath: %v", err)
@@ -99,7 +115,7 @@ func TestUnitPath(t *testing.T) {
 }
 
 func TestInstallContextCanceled(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setHome(t, t.TempDir())
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if err := linux.Install(ctx, "/usr/local/bin/pmmcpd"); err == nil {
@@ -111,21 +127,21 @@ func TestInstallContextCanceled(t *testing.T) {
 }
 
 func TestInstallHomeDirError(t *testing.T) {
-	t.Setenv("HOME", "")
+	unsetHome(t)
 	if err := linux.Install(context.Background(), "/usr/local/bin/pmmcpd"); err == nil {
 		t.Fatal("want error when $HOME is unset")
 	}
 }
 
 func TestUninstallHomeDirError(t *testing.T) {
-	t.Setenv("HOME", "")
+	unsetHome(t)
 	if err := linux.Uninstall(context.Background()); err == nil {
 		t.Fatal("want error when $HOME is unset")
 	}
 }
 
 func TestUnitPathHomeDirError(t *testing.T) {
-	t.Setenv("HOME", "")
+	unsetHome(t)
 	if _, err := linux.UnitPath(); err == nil {
 		t.Fatal("want error when $HOME is unset")
 	}
@@ -133,7 +149,7 @@ func TestUnitPathHomeDirError(t *testing.T) {
 
 func TestInstallMkdirError(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	// A regular file where .config should be a directory forces MkdirAll
 	// to fail with "not a directory".
 	if err := os.WriteFile(filepath.Join(home, ".config"), []byte("not a dir"), 0o644); err != nil {
@@ -146,7 +162,7 @@ func TestInstallMkdirError(t *testing.T) {
 
 func TestInstallWriteFileError(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	dir := filepath.Join(home, ".config", "systemd", "user")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -162,7 +178,7 @@ func TestInstallWriteFileError(t *testing.T) {
 
 func TestUninstallRemoveError(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	dir := filepath.Join(home, ".config", "systemd", "user")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -182,7 +198,7 @@ func TestUninstallRemoveError(t *testing.T) {
 }
 
 func TestInstallRejectsControlChars(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setHome(t, t.TempDir())
 	// A newline in the path could otherwise inject [Service] directives.
 	err := linux.Install(context.Background(), "/home/u/pmmcpd\nExecStartPre=/bin/rm -rf /")
 	if err == nil {
