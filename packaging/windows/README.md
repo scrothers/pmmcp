@@ -61,5 +61,5 @@ pmmcp uninstall-service         # remove generated files under %LOCALAPPDATA%\pm
 ```
 
 State (database, logs, secrets) is left untouched by both — see
-[docs/operations.md](../../docs/operations.md) before deleting the state
+[Operations](https://github.com/scrothers/pmmcp/wiki/Operations) before deleting the state
 directory shown by `pmmcp daemon-info`.

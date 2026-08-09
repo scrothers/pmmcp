@@ -44,4 +44,4 @@ Load daemon (and client-shared) configuration once at process start: file (TOML/
 - Do not auto-start the daemon from config load
 
 ## related
-- `internal/doctor`, `internal/webhook`, `internal/sandbox`, `docs/configuration.md`
+- `internal/doctor`, `internal/webhook`, `internal/sandbox`, `https://github.com/scrothers/pmmcp/wiki/Configuration`

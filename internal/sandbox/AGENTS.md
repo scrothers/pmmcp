@@ -31,7 +31,7 @@ Platform-agnostic sandbox **profiles and path policy**. Defines intent (`strict`
 ## touch map
 | Change | Also touch |
 |--------|------------|
-| Profile / mode vocabulary | Platform `Apply`, `process/local` wrap, docs/security |
+| Profile / mode vocabulary | Platform `Apply`, `process/local` wrap, the Security wiki page |
 | Default deny roots (e.g. `.ssh`) | Platform tests; declare policy if YAML defaults change |
 | `ErrStrictUnsupported` semantics | `sandbox/windows`, `process/local` Windows wrap |
 
