@@ -112,6 +112,21 @@ func TestSchemaForTool(t *testing.T) {
 	if !ok || len(req) != 2 {
 		t.Fatalf("pm_start schema required = %v", s["required"])
 	}
+	// pm_run must expose a real schema: only command is required (the daemon
+	// autogenerates a run-… name), and the one-shot knobs are present.
+	run := schemaForTool("pm_run")
+	if req, ok := run["required"].([]string); !ok || len(req) != 1 || req[0] != "command" {
+		t.Fatalf("pm_run schema required = %v, want [command]", run["required"])
+	}
+	props, ok := run["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("pm_run schema has no properties")
+	}
+	for _, p := range []string{"name", "command", "cwd", "sandbox", "wait", "timeout_sec"} {
+		if _, ok := props[p]; !ok {
+			t.Errorf("pm_run schema missing property %q", p)
+		}
+	}
 	// Unknown tool falls back to the generic object schema.
 	if schemaForTool("pm_unknown")["type"] != "object" {
 		t.Fatalf("generic schema missing type=object")
