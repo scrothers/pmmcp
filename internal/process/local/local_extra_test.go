@@ -21,6 +21,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -59,7 +60,7 @@ func TestStartRejectsCanceledContext(t *testing.T) {
 	m := local.New()
 	_, err := m.Start(canceledContext(t), process.StartSpec{
 		ID:      "proc-01CTXCANCELSTART000001",
-		Command: []string{"/bin/true"},
+		Command: []string{"true"},
 	})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Start = %v, want context.Canceled", err)
@@ -69,7 +70,7 @@ func TestStartRejectsCanceledContext(t *testing.T) {
 func TestStartRejectsEmptyID(t *testing.T) {
 	t.Parallel()
 	m := local.New()
-	_, err := m.Start(context.Background(), process.StartSpec{Command: []string{"/bin/true"}})
+	_, err := m.Start(context.Background(), process.StartSpec{Command: []string{"true"}})
 	if !errors.Is(err, process.ErrInvalidSpec) {
 		t.Fatalf("Start = %v, want ErrInvalidSpec", err)
 	}
@@ -129,7 +130,7 @@ func TestStartLogDirErrors(t *testing.T) {
 			m := local.New()
 			_, err := m.Start(context.Background(), process.StartSpec{
 				ID:      "proc-01LOGDIRFAIL0000000001",
-				Command: []string{"/bin/true"},
+				Command: []string{"true"},
 				LogDir:  tt.logDir(t),
 			})
 			if err == nil || !strings.Contains(err.Error(), tt.wantSub) {
@@ -208,7 +209,7 @@ func TestStartSandboxWithoutCwdUsesWorkingDirectory(t *testing.T) {
 	m := local.New()
 	h, err := m.Start(context.Background(), process.StartSpec{
 		ID:      "proc-01SANDBOXNOCWD00000001",
-		Command: []string{"/bin/true"},
+		Command: []string{"true"},
 		Sandbox: "standard",
 	})
 	if err != nil {
@@ -317,7 +318,7 @@ func TestStopAfterExitIsNoOp(t *testing.T) {
 	m := local.New()
 	h, err := m.Start(context.Background(), process.StartSpec{
 		ID:      "proc-01STOPAFTEREXIT0000001",
-		Command: []string{"/bin/true"},
+		Command: []string{"true"},
 	})
 	if err != nil {
 		t.Fatalf("Start: %v", err)
@@ -440,9 +441,13 @@ func TestStopKillsGrandchildren(t *testing.T) {
 	}
 }
 
-// waitForChildren polls /proc until ppid has at least n children, returning them.
+// waitForChildren polls /proc until ppid has at least n children, returning
+// them. /proc enumeration is Linux-only, so callers are skipped elsewhere.
 func waitForChildren(t *testing.T, ppid, n int) []int {
 	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skip("process-tree enumeration via /proc is Linux-only")
+	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		kids := childrenOf(t, ppid)
@@ -532,7 +537,7 @@ func TestSignalTerminalProcess(t *testing.T) {
 	m := local.New()
 	h, err := m.Start(context.Background(), process.StartSpec{
 		ID:      "proc-01SIGNALTERMINAL000001",
-		Command: []string{"/bin/true"},
+		Command: []string{"true"},
 	})
 	if err != nil {
 		t.Fatalf("Start: %v", err)

@@ -17,6 +17,7 @@ package daemon_test
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -90,7 +91,7 @@ func TestListenAndServeGracefulStopFallsBackAfterTimeout(t *testing.T) {
 	cfg := newTestConfig(t, dir)
 	ctx, cancel := context.WithCancel(context.Background())
 	srv, err := daemon.New(ctx, daemon.Options{
-		Config: cfg, DBPath: filepath.Join(dir, "db.sqlite"),
+		Config: cfg, DBPath: sqliteDBPathForTest(t),
 		GracefulStopTimeout: budget,
 	})
 	if err != nil {
@@ -144,6 +145,14 @@ func TestListenAndServeGracefulStopFallsBackAfterTimeout(t *testing.T) {
 		}
 	case <-time.After(10 * budget):
 		t.Fatalf("ListenAndServe did not return within %v of the %v Stop() fallback deadline", 10*budget, budget)
+	}
+	// gs.Stop() above only tore down the gRPC transport; "long-wait" (sleep
+	// 30) is still running and, with the IPC connection now dead, unreachable
+	// through the client. Kill it directly by PID — Server.Close (below)
+	// doesn't stop managed children either, and an orphaned sleep still
+	// holding stderr.log open races t.TempDir's cleanup on Windows.
+	if p, err := os.FindProcess(start.PID); err == nil {
+		_ = p.Kill()
 	}
 	<-waitDone
 	_ = srv.Close()

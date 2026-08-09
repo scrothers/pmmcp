@@ -22,6 +22,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -30,12 +31,55 @@ import (
 	"github.com/scrothers/pmmcp/internal/config"
 	"github.com/scrothers/pmmcp/internal/daemon"
 	"github.com/scrothers/pmmcp/internal/ipc"
+	"github.com/scrothers/pmmcp/internal/testsock"
 )
+
+// sqliteDBPathForTest returns the path a test should open db.sqlite at.
+//
+// On Windows this is deliberately a directory OUTSIDE t.TempDir(), with its
+// own bounded, non-failing cleanup. modernc.org/sqlite's conn.Close calls
+// sqlite3_close_v2, which — per SQLite's own semantics — defers releasing a
+// connection's handle until its internal bookkeeping (WAL auto-checkpoint,
+// briefly re-acquiring an exclusive lock) settles; that can lag Close()
+// returning by an observable amount, and only on Windows does an open
+// handle actually block deleting the file (POSIX allows unlinking a file a
+// process still has open). This was chased down across several rounds of
+// Windows CI fixes to internal/daemon's shutdown ordering (gRPC drain,
+// background-loop and per-watch-goroutine tracking, all now joined before
+// store.Close in Server.Close) without finding a remaining Go-level holder;
+// what's left reproduces at a low, steady rate (~2% of heavy daemon tests)
+// consistent with OS/library-level release timing rather than a leaked
+// goroutine. Documented concession, not a fix for a known bug — revisit if
+// a future round finds an actual holder. POSIX cleanup is unaffected: this
+// function is a no-op wrapper around t.TempDir there, so behavior everywhere
+// else in the suite is unchanged.
+func sqliteDBPathForTest(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return filepath.Join(t.TempDir(), "db.sqlite")
+	}
+	dbDir, err := os.MkdirTemp("", "pmmcp-db-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		deadline := time.Now().Add(2 * time.Second)
+		var rmErr error
+		for time.Now().Before(deadline) {
+			if rmErr = os.RemoveAll(dbDir); rmErr == nil {
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		t.Logf("sqliteDBPathForTest: %s still busy after retrying for 2s: %v", dbDir, rmErr)
+	})
+	return filepath.Join(dbDir, "db.sqlite")
+}
 
 func startTestDaemon(t *testing.T) (context.Context, context.CancelFunc, *ipc.Client, string) {
 	t.Helper()
 	dir := t.TempDir()
-	sock := filepath.Join(dir, "pmmcpd.sock")
+	sock := testsock.Path(t)
 	cfg, err := config.Load(config.LoadOptions{
 		GOOS: "linux", Home: dir,
 		LookupEnv: func(string) (string, bool) { return "", false },
@@ -49,7 +93,7 @@ func startTestDaemon(t *testing.T) (context.Context, context.CancelFunc, *ipc.Cl
 	cfg.Relaunch.Enabled = false
 	ctx, cancel := context.WithCancel(context.Background())
 	srv, err := daemon.New(ctx, daemon.Options{
-		Config: cfg, DBPath: filepath.Join(dir, "db.sqlite"),
+		Config: cfg, DBPath: sqliteDBPathForTest(t),
 		// Fast supervision clocks: same code paths as production, just quicker
 		// ticks so product tests don't wait out multi-hundred-ms intervals.
 		AutoRestartTick:     25 * time.Millisecond,
@@ -77,8 +121,45 @@ func startTestDaemon(t *testing.T) (context.Context, context.CancelFunc, *ipc.Cl
 	if c == nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = c.Close() })
+	t.Cleanup(func() {
+		stopAllForTest(ctx, t, c)
+		_ = c.Close()
+	})
 	return ctx, cancel, c, dir
+}
+
+// stopAllForTest removes every process still known to the daemon and waits
+// (via the synchronous Stop-then-delete path doRemove takes) for each to
+// actually exit. Server.Close cancels the daemon's run context but does not
+// stop managed child processes or wait for background goroutines before
+// returning, so a test that leaves a "sleep"-style process running would
+// otherwise still have it alive when t.TempDir's cleanup runs next. POSIX
+// allows unlinking a file an unrelated process still has open, so this race
+// is invisible on Linux/macOS; Windows refuses to delete an open file, so
+// the orphaned child's log handle turns into a "used by another process"
+// cleanup failure.
+//
+// Two things a plain Force-stop sweep would miss, both handled here:
+//   - Some tests deliberately leave the client on a restricted/foreign
+//     session (cross-session-denial tests): switch to a full-role session
+//     first so this sweep can see and act on every process regardless of
+//     who started it — authorizeTarget allows RoleFull unconditionally.
+//   - api.MethodStop alone isn't enough for an AutoRestart:true process:
+//     s.autoRestart is only ever cleared by doRemove, never by doStop or
+//     doDisable, so runAutoRestartLoop's next tick (as fast as 25ms in these
+//     test configs) can resurrect a stopped process moments after this sweep
+//     returns, leaving a fresh orphan anyway. MethodRemove stops *and*
+//     clears s.autoRestart, so nothing comes back.
+func stopAllForTest(ctx context.Context, t *testing.T, c *ipc.Client) {
+	t.Helper()
+	c.SetSession("sess-cleanup-sweep", "full")
+	var list []api.ProcessView
+	if err := c.Call(ctx, api.MethodList, api.ListPayload{All: true, IncludeExited: true}, &list); err != nil {
+		return
+	}
+	for _, p := range list {
+		_ = c.Call(ctx, api.MethodRemove, api.IDPayload{ID: p.ID}, &map[string]any{})
+	}
 }
 
 func TestProductAutoRestart(t *testing.T) {
@@ -87,7 +168,7 @@ func TestProductAutoRestart(t *testing.T) {
 	// Process exits immediately; auto_restart should bring it back.
 	var start api.StartResult
 	if err := c.Call(ctx, api.MethodStart, api.StartPayload{
-		Name: "once", Command: []string{"/bin/true"}, Sandbox: "off", AutoRestart: true,
+		Name: "once", Command: []string{"true"}, Sandbox: "off", AutoRestart: true,
 	}, &start); err != nil {
 		t.Fatal(err)
 	}
@@ -312,7 +393,7 @@ func TestSandboxRelaxRequiresCapability(t *testing.T) {
 	t.Parallel()
 	// Rebuild daemon with strict default; agent role lacks CapSandboxRelax.
 	dir := t.TempDir()
-	sock := filepath.Join(dir, "pmmcpd.sock")
+	sock := testsock.Path(t)
 	cfg, err := config.Load(config.LoadOptions{
 		GOOS: "linux", Home: dir,
 		LookupEnv: func(string) (string, bool) { return "", false },
@@ -326,7 +407,7 @@ func TestSandboxRelaxRequiresCapability(t *testing.T) {
 	cfg.Relaunch.Enabled = false
 	ctx2, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	srv, err := daemon.New(ctx2, daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := daemon.New(ctx2, daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -479,6 +560,11 @@ func TestDaemonInfoRedactsToken(t *testing.T) {
 }
 
 func TestForceStopIgnoresSIGTERMTrap(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Windows has no POSIX signal delivery for a shell to trap: there is
+		// no SIGTERM to ignore, so this scenario doesn't exist on the platform.
+		t.Skip("SIGTERM trapping is POSIX-only")
+	}
 	t.Parallel()
 	ctx, _, c, _ := startTestDaemon(t)
 	// Trap SIGTERM and keep sleeping — grace stop would hang; force must win.
@@ -603,6 +689,12 @@ func TestStartEnvKeysNoValues(t *testing.T) {
 
 func TestPortsDiscovered(t *testing.T) {
 	t.Parallel()
+	// ports.DiscoverListeningPorts is a documented Linux-only /proc-based
+	// mechanism (internal/ports/discover_other.go is a no-op elsewhere), so
+	// status.discovered has nothing to report on other platforms.
+	if runtime.GOOS != "linux" {
+		t.Skip("port discovery is Linux-only")
+	}
 	ctx, _, c, _ := startTestDaemon(t)
 	// Listen via python/nc-free shell: use a tiny Go-less approach — `sleep` won't listen.
 	// Start a process that binds a port with pure bash /dev/tcp is not a server.

@@ -19,9 +19,15 @@ import "github.com/scrothers/pmmcp/internal/store"
 // SetStoreForTest swaps the process store after construction, for
 // fault-injection tests that need store.List/Get to fail (declare.diff and
 // declare.apply's store-read error paths, which cannot be reached through the
-// public IPC surface with a healthy store).
-func SetStoreForTest(s *Server, st store.ProcessStore) {
+// public IPC surface with a healthy store). It returns the store being
+// replaced so the caller can Close it during cleanup: Server.Close only
+// closes whatever s.store currently points to, so without this the real
+// SQLite handle opened by New would leak (and, on Windows, keep db.sqlite
+// locked past t.TempDir's cleanup).
+func SetStoreForTest(s *Server, st store.ProcessStore) store.ProcessStore {
+	prev := s.store
 	s.store = st
+	return prev
 }
 
 // KeyringForTest exposes the daemon's file-backed keyring so tests can write

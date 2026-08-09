@@ -19,7 +19,7 @@ import (
 	"encoding/json"
 	"net"
 	"os"
-	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -27,6 +27,7 @@ import (
 	"github.com/scrothers/pmmcp/internal/api"
 	pmmcpv1 "github.com/scrothers/pmmcp/internal/api/gen/pmmcp/v1"
 	"github.com/scrothers/pmmcp/internal/doctor"
+	"github.com/scrothers/pmmcp/internal/testsock"
 	"google.golang.org/grpc"
 )
 
@@ -97,8 +98,11 @@ func serve(t *testing.T, ln net.Listener, d pmmcpv1.DaemonServer) {
 }
 
 func TestCheckMissingSocket(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("exercises the unix-socket transport; Windows uses named pipes")
+	}
 	t.Parallel()
-	sock := filepath.Join(t.TempDir(), "missing.sock")
+	sock := testsock.Path(t)
 	r := doctor.Check(context.Background(), sock)
 	if r.OK {
 		t.Fatal("OK = true, want false for missing socket")
@@ -124,8 +128,11 @@ func TestCheckEmptyEndpoint(t *testing.T) {
 }
 
 func TestCheckUnixHelloOK(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("exercises the unix-socket transport; Windows uses named pipes")
+	}
 	t.Parallel()
-	sock := filepath.Join(t.TempDir(), "d.sock")
+	sock := testsock.Path(t)
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
 		t.Fatalf("listen unix: %v", err)
@@ -201,11 +208,14 @@ func TestCheckTCPVersionSkewNotOK(t *testing.T) {
 }
 
 func TestCheckUnixStaleSocketFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("exercises the unix-socket transport; Windows uses named pipes")
+	}
 	t.Parallel()
 	// A stale socket path: the file exists (e.g. left behind by a crashed
 	// daemon) but nothing is listening, so dialing it must fail rather than
 	// hang or falsely report OK — distinct from the ENOENT (missing) case.
-	sock := filepath.Join(t.TempDir(), "stale.sock")
+	sock := testsock.Path(t)
 	if err := os.WriteFile(sock, []byte("not a socket"), 0o600); err != nil {
 		t.Fatalf("write stale file: %v", err)
 	}
@@ -224,11 +234,14 @@ func TestCheckUnixStaleSocketFile(t *testing.T) {
 }
 
 func TestCheckUnixSecondHelloFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("exercises the unix-socket transport; Windows uses named pipes")
+	}
 	t.Parallel()
 	// ipc.Dial performs its own Hello handshake before handing back a
 	// client; checkUnix then issues a second, explicit Hello. Make the
 	// second call fail to exercise that post-dial error branch.
-	sock := filepath.Join(t.TempDir(), "d.sock")
+	sock := testsock.Path(t)
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
 		t.Fatalf("listen unix: %v", err)

@@ -57,6 +57,16 @@ func TestInstallUninstallCurrentOS(t *testing.T) {
 	}
 }
 
+// setHome sets HOME and USERPROFILE to dir so os.UserHomeDir resolves dir
+// consistently regardless of which GOOS this test binary actually runs on
+// (the linux/darwin backends read HOME; only USERPROFILE matters on
+// windows, so both must be set to exercise a non-native GOOS arm).
+func setHome(t *testing.T, dir string) {
+	t.Helper()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+}
+
 // TestInstallForEveryOS exercises every OS dispatch arm of the goos seam,
 // regardless of which OS runs this test binary.
 func TestInstallForEveryOS(t *testing.T) {
@@ -77,7 +87,7 @@ func TestInstallForEveryOS(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.goos, func(t *testing.T) {
 			home := t.TempDir()
-			t.Setenv("HOME", home)
+			setHome(t, home)
 			t.Setenv("LOCALAPPDATA", filepath.Join(home, "LocalAppData"))
 
 			ctx := context.Background()

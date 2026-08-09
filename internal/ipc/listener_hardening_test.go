@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/scrothers/pmmcp/internal/ipc"
+	"github.com/scrothers/pmmcp/internal/testsock"
 )
 
 func TestListenEmptyEndpoint(t *testing.T) {
@@ -45,7 +46,7 @@ func TestListenNamedPipePrefixUnsupportedOnUnix(t *testing.T) {
 
 func TestListenCreatesFreshNestedDir(t *testing.T) {
 	t.Parallel()
-	base := t.TempDir()
+	base := filepath.Dir(testsock.Path(t))
 	endpoint := filepath.Join(base, "nested", "does", "not", "exist", "pmmcp.sock")
 	ln, err := ipc.Listen(endpoint)
 	if err != nil {
@@ -66,7 +67,7 @@ func TestSecureSocketDirParentNotWritable(t *testing.T) {
 		t.Skip("root bypasses directory write permission checks")
 	}
 	t.Parallel()
-	base := t.TempDir()
+	base := filepath.Dir(testsock.Path(t))
 	parent := filepath.Join(base, "parent")
 	if err := os.Mkdir(parent, 0o500); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -92,7 +93,7 @@ func TestSecureSocketDirStatError(t *testing.T) {
 
 func TestSecureSocketDirIsSymlink(t *testing.T) {
 	t.Parallel()
-	base := t.TempDir()
+	base := filepath.Dir(testsock.Path(t))
 	realDir := filepath.Join(base, "real")
 	if err := os.Mkdir(realDir, 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -109,7 +110,7 @@ func TestSecureSocketDirIsSymlink(t *testing.T) {
 
 func TestSecureSocketDirNotADirectory(t *testing.T) {
 	t.Parallel()
-	base := t.TempDir()
+	base := filepath.Dir(testsock.Path(t))
 	notDir := filepath.Join(base, "notadir")
 	if err := os.WriteFile(notDir, []byte("x"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
@@ -137,8 +138,7 @@ func TestListenUnixListenFailsOnOverlongPath(t *testing.T) {
 
 func TestListenRemovesTrulyStaleSocketFile(t *testing.T) {
 	t.Parallel()
-	base := t.TempDir()
-	endpoint := filepath.Join(base, "dead.sock")
+	endpoint := filepath.Join(filepath.Dir(testsock.Path(t)), "dead.sock")
 
 	// Build a socket file with nothing listening behind it: bind, then
 	// close without unlinking, leaving a dead-but-present socket inode —
@@ -169,7 +169,7 @@ func TestPrepareSocketPathRemoveStaleSocketFails(t *testing.T) {
 		t.Skip("root bypasses directory write permission checks")
 	}
 	t.Parallel()
-	dir := t.TempDir()
+	dir := filepath.Dir(testsock.Path(t))
 	endpoint := filepath.Join(dir, "dead.sock")
 
 	raw, err := net.Listen("unix", endpoint)
@@ -209,7 +209,7 @@ func TestPrepareSocketPathStatError(t *testing.T) {
 }
 
 func TestListenTightensLooseSocketDir(t *testing.T) {
-	base := t.TempDir()
+	base := filepath.Dir(testsock.Path(t))
 	dir := filepath.Join(base, "run")
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -229,7 +229,7 @@ func TestListenTightensLooseSocketDir(t *testing.T) {
 }
 
 func TestListenRefusesSymlinkedEndpoint(t *testing.T) {
-	base := t.TempDir()
+	base := filepath.Dir(testsock.Path(t))
 	target := filepath.Join(base, "real")
 	if err := os.WriteFile(target, []byte("x"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
@@ -244,7 +244,7 @@ func TestListenRefusesSymlinkedEndpoint(t *testing.T) {
 }
 
 func TestListenRefusesNonSocketFile(t *testing.T) {
-	base := t.TempDir()
+	base := filepath.Dir(testsock.Path(t))
 	endpoint := filepath.Join(base, "pmmcp.sock")
 	if err := os.WriteFile(endpoint, []byte("x"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
@@ -255,8 +255,7 @@ func TestListenRefusesNonSocketFile(t *testing.T) {
 }
 
 func TestListenRemovesStaleSocket(t *testing.T) {
-	base := t.TempDir()
-	endpoint := filepath.Join(base, "pmmcp.sock")
+	endpoint := testsock.Path(t)
 	ln, err := ipc.Listen(endpoint)
 	if err != nil {
 		t.Fatalf("first Listen: %v", err)
@@ -273,8 +272,7 @@ func TestListenRemovesStaleSocket(t *testing.T) {
 }
 
 func TestListenRefusesLiveSocketSteal(t *testing.T) {
-	base := t.TempDir()
-	endpoint := filepath.Join(base, "pmmcp.sock")
+	endpoint := testsock.Path(t)
 	ln, err := ipc.Listen(endpoint)
 	if err != nil {
 		t.Fatalf("first Listen: %v", err)

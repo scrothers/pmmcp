@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/scrothers/pmmcp/internal/testsock"
 )
 
 func TestVersionCommand(t *testing.T) {
@@ -92,7 +94,7 @@ func TestRunDaemonServesUntilCancel(t *testing.T) {
 	t.Setenv("PMMCP_CONFIG", "")
 	t.Setenv("HOME", dir)
 	t.Setenv("PMMCP_STATE_DIR", filepath.Join(dir, "state"))
-	t.Setenv("PMMCP_IPC_ENDPOINT", filepath.Join(dir, "d.sock"))
+	t.Setenv("PMMCP_IPC_ENDPOINT", testsock.Path(t))
 	t.Setenv("PMMCP_SANDBOX_DEFAULT", "off")
 
 	ctx, cancel := context.WithCancel(context.Background())

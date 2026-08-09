@@ -19,8 +19,9 @@ package ipc
 import (
 	"errors"
 	"net"
-	"path/filepath"
 	"testing"
+
+	"github.com/scrothers/pmmcp/internal/testsock"
 )
 
 func TestFilepathDirTable(t *testing.T) {
@@ -82,8 +83,7 @@ func TestAcceptRejectsPeerCredError(t *testing.T) {
 
 func TestAcceptRejectsMismatchedUID(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	sock := filepath.Join(dir, "reject.sock")
+	sock := testsock.Path(t)
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
 		t.Fatal(err)

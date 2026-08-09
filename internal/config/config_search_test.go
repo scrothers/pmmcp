@@ -140,7 +140,12 @@ func TestIPCTokenFileCanonicalLocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.TokenFile != secret {
+	// The TOML value is written with forward slashes (writeConfig below uses
+	// filepath.ToSlash so the literal round-trips through TOML string syntax
+	// without escaping); config.Load folds it in verbatim, so compare after
+	// converting back to native separators rather than assuming the loader
+	// normalizes the path itself.
+	if filepath.Clean(filepath.FromSlash(cfg.TokenFile)) != secret {
 		t.Fatalf("TokenFile = %q, want %q ([ipc].token_file folded in)", cfg.TokenFile, secret)
 	}
 	if strings.Contains(cfg.String(), secret) || strings.Contains(cfg.DoctorView(), secret) {

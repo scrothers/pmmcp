@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -27,6 +26,7 @@ import (
 	pmmcpv1 "github.com/scrothers/pmmcp/internal/api/gen/pmmcp/v1"
 	"github.com/scrothers/pmmcp/internal/domain"
 	"github.com/scrothers/pmmcp/internal/ipc"
+	"github.com/scrothers/pmmcp/internal/testsock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -82,8 +82,7 @@ func (f *fakeDaemonServer) lastRequest() *pmmcpv1.CallRequest {
 // and returns its endpoint plus a stop func.
 func startFakeDaemon(t *testing.T, fake *fakeDaemonServer) string {
 	t.Helper()
-	dir := t.TempDir()
-	endpoint := filepath.Join(dir, "fake.sock")
+	endpoint := testsock.Path(t)
 	ln, err := ipc.Listen(endpoint)
 	if err != nil {
 		t.Fatalf("Listen: %v", err)
@@ -142,10 +141,9 @@ func TestDialVersionEmptyFailsClosed(t *testing.T) {
 
 func TestDialUnreachableEndpoint(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if _, err := ipc.Dial(ctx, filepath.Join(dir, "nope.sock")); err == nil {
+	if _, err := ipc.Dial(ctx, testsock.Path(t)); err == nil {
 		t.Fatal("Dial to nonexistent socket: want error, got nil")
 	}
 }

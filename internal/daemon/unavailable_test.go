@@ -17,18 +17,18 @@ package daemon_test
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/scrothers/pmmcp/internal/domain"
 	"github.com/scrothers/pmmcp/internal/ipc"
+	"github.com/scrothers/pmmcp/internal/testsock"
 )
 
 // TestDaemonUnavailableWhenDown proves dial fails with daemon_unavailable when no pmmcpd listens.
 func TestDaemonUnavailableWhenDown(t *testing.T) {
 	t.Parallel()
-	sock := filepath.Join(t.TempDir(), "no-daemon.sock")
+	sock := testsock.Path(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	_, err := ipc.Dial(ctx, sock)

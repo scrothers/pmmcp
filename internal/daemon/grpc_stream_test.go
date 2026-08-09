@@ -29,7 +29,10 @@ func TestGRPCSubscribeLogsStream(t *testing.T) {
 	ctx, _, c, _ := startTestDaemon(t)
 	var start api.StartResult
 	if err := c.Call(ctx, api.MethodStart, api.StartPayload{
-		Name: "logstream", Command: []string{"/bin/sh", "-c", "echo STREAM_MARKER; sleep 0.2"},
+		// "sh" is resolved via PATH: /bin/sh on Linux/macOS, Git's sh.exe on
+		// Windows CI runners (which ships true/echo/sleep too) — a hardcoded
+		// /bin/sh path doesn't exist on Windows.
+		Name: "logstream", Command: []string{"sh", "-c", "echo STREAM_MARKER; sleep 0.2"},
 		Sandbox: "off",
 	}, &start); err != nil {
 		t.Fatal(err)

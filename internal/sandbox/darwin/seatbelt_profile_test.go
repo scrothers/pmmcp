@@ -17,6 +17,8 @@ package darwin_test
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -78,7 +80,11 @@ func TestSeatbeltProfileAllowsMetadataRead(t *testing.T) {
 // consults $HOME, so an empty $HOME makes it fail.
 // Mutates $HOME via t.Setenv, so it must not run in parallel.
 func TestSeatbeltProfileStandardHomeUnset(t *testing.T) {
+	// userHome (production code) resolves via os.UserHomeDir, which on
+	// windows consults USERPROFILE instead of HOME — both must be cleared to
+	// force the error branch on every CI platform.
 	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
 
 	root := t.TempDir()
 	pol, err := sandbox.DefaultPolicy(sandbox.Standard, root)
@@ -106,18 +112,30 @@ func TestSeatbeltProfileStandardReadDenyEdgeCases(t *testing.T) {
 		t.Skip("no home dir")
 	}
 
+	// writeStandardHomeReads filters ReadDeny entries with filepath.IsAbs,
+	// which requires a drive letter on windows — a unix-style "/abs/..."
+	// literal is not absolute there, so use an OS-native absolute path.
+	absDeny := filepath.Join(string(filepath.Separator), "abs", "custom-deny")
+	if runtime.GOOS == "windows" {
+		absDeny = `C:\abs\custom-deny`
+	}
+
 	root := t.TempDir()
 	pol := sandbox.Policy{
 		Profile:       sandbox.Standard,
 		WritableRoots: []string{root},
-		ReadDeny:      []string{"", "   ", "relative/deny", "/abs/custom-deny"},
+		ReadDeny:      []string{"", "   ", "relative/deny", absDeny},
 	}
 	p := darwin.SeatbeltProfile(root, pol)
 
 	if strings.Contains(p, "relative/deny") {
 		t.Errorf("relative ReadDeny entries must be skipped:\n%s", p)
 	}
-	if !strings.Contains(p, "/abs/custom-deny") {
+	// The profile writer renders the path with %q, which backslash-escapes
+	// a windows path (each \ becomes \\) — so the raw absDeny string never
+	// appears verbatim in p there. Compare against the same %q rendering
+	// the production code uses instead of the raw path.
+	if !strings.Contains(p, fmt.Sprintf("%q", absDeny)) {
 		t.Errorf("absolute ReadDeny entries must produce a deny line:\n%s", p)
 	}
 }
@@ -136,9 +154,12 @@ func TestSeatbeltProfileStandardAllowsEgress(t *testing.T) {
 	if !strings.Contains(p, "(allow network*)") {
 		t.Errorf("standard profile should allow egress:\n%s", p)
 	}
-	// Standard reads home but denies the secret subtrees.
+	// Standard reads home but denies the secret subtrees. Check for the
+	// bare marker rather than "/.ssh": writeStandardHomeReads joins it onto
+	// home with filepath.Join, so on windows the profile spells it
+	// `\.ssh`, not `/.ssh`.
 	if home, err := os.UserHomeDir(); err == nil && home != "" && home != "/" {
-		if !strings.Contains(p, "/.ssh") {
+		if !strings.Contains(p, ".ssh") {
 			t.Errorf("standard profile should explicitly deny ~/.ssh:\n%s", p)
 		}
 	}

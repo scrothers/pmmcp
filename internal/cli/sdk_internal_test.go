@@ -17,6 +17,7 @@ package cli
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -40,12 +41,12 @@ func TestResolveDaemonPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveDaemonPath: %v", err)
 	}
-	if !strings.HasSuffix(got, "bin/pmmcpd") || !strings.HasPrefix(got, "/") {
+	if !strings.HasSuffix(got, filepath.Join("bin", "pmmcpd")) || !filepath.IsAbs(got) {
 		t.Fatalf("resolveDaemonPath = %q, want absolute", got)
 	}
 	// No override: resolves via sibling/PATH or errors — either way an absolute
 	// path or a clear error, never a bare unresolvable name.
-	if p, err := resolveDaemonPath(""); err == nil && !strings.HasPrefix(p, "/") {
+	if p, err := resolveDaemonPath(""); err == nil && !filepath.IsAbs(p) {
 		t.Fatalf("resolveDaemonPath(\"\") = %q, want absolute or error", p)
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -95,6 +96,13 @@ func bytesRepeat(n int) []byte {
 // paths; every other Add-based test in this package uses t.TempDir(), which
 // is always absolute.
 func TestAddAbsPathError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Windows holds an implicit handle open on a process's own current
+		// directory, so removing it (below) fails with a file-in-use error
+		// rather than the ENOENT this test needs to construct; there is no
+		// stray handle in this test itself to close.
+		t.Skip("cannot remove a directory that is the process's own cwd on windows")
+	}
 	orig, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Getwd: %v", err)
@@ -119,6 +127,9 @@ func TestAddAbsPathError(t *testing.T) {
 // (os.Stat succeeds on the directory itself, but os.ReadDir cannot list it).
 func TestAddDirPermissionDenied(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits don't block reads the way chmod 000 implies")
+	}
 	dir := filepath.Join(t.TempDir(), "locked")
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -139,6 +150,9 @@ func TestAddDirPermissionDenied(t *testing.T) {
 // revoked afterward must not panic or flag a change, just skip the tick.
 func TestDirChangedReadPermissionRevoked(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits don't block reads the way chmod 000 implies")
+	}
 	dir := filepath.Join(t.TempDir(), "watched")
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		t.Fatal(err)

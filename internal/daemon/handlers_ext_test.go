@@ -25,12 +25,13 @@ import (
 	"github.com/scrothers/pmmcp/internal/daemon"
 	"github.com/scrothers/pmmcp/internal/declare"
 	"github.com/scrothers/pmmcp/internal/ipc"
+	"github.com/scrothers/pmmcp/internal/testsock"
 )
 
 func TestHandlersExt_GroupHealthValidateWebhookProfile(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	sock := filepath.Join(dir, "pmmcpd.sock")
+	sock := testsock.Path(t)
 	cfg, err := config.Load(config.LoadOptions{
 		GOOS:      "linux",
 		Home:      dir,
@@ -47,7 +48,7 @@ func TestHandlersExt_GroupHealthValidateWebhookProfile(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}

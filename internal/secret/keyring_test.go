@@ -17,6 +17,7 @@ package secret_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/scrothers/pmmcp/internal/secret"
@@ -37,7 +38,8 @@ func TestFileBackend(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Mode().Perm()&0o077 != 0 {
+	// POSIX mode bits do not restrict access on windows.
+	if runtime.GOOS != "windows" && st.Mode().Perm()&0o077 != 0 {
 		t.Fatalf("perms too open: %v", st.Mode())
 	}
 	v, err := b.Get("api_token")
@@ -75,6 +77,9 @@ func TestFileBackendRejectsTraversal(t *testing.T) {
 
 func TestNewFileBackendTightensDirMode(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX dir-mode tightening is not meaningful on windows")
+	}
 	dir := filepath.Join(t.TempDir(), "kr")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -126,6 +131,9 @@ func TestNewFileBackendChmodError(t *testing.T) {
 // keyring directory with no write permission rejects file creation.
 func TestFileBackendSetWriteError(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod 0o500 does not make a directory read-only to its owner on windows")
+	}
 	dir := filepath.Join(t.TempDir(), "kr")
 	b, err := secret.NewFileBackend(dir)
 	if err != nil {

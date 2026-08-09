@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/user"
@@ -78,7 +79,14 @@ type Server struct {
 	hooks    *webhook.Registry
 	shares   *authz.ShareBook
 
-	mu                  sync.Mutex
+	mu sync.Mutex
+	// closing is set under mu at the start of Close, before bg.Wait. It gates
+	// startWatchForProcess so a racing watch.set can't call bg.Add(1) after
+	// Close has already begun draining bg (which would be a WaitGroup misuse:
+	// Add with a positive delta must happen-before the Wait call it competes
+	// with). Both the check and the Add happen under mu, so the ordering is
+	// unambiguous either way.
+	closing             bool
 	byName              map[string]string // project\0name -> id
 	projects            map[string]string // key -> root
 	secrets             map[string]string // ref name -> path (not values)
@@ -103,10 +111,20 @@ type Server struct {
 	gracefulStopTimeout time.Duration      // GracefulStop → Stop fallback budget (0 → 5s)
 	logsPreviewFollow   time.Duration      // doSubscribe logs-preview follow window (0 → 1.5s)
 	ln                  net.Listener
+	// gs is set by ListenAndServe once the gRPC server is created; nil if
+	// ListenAndServe was never called (e.g. New+Close-only tests). Needed so
+	// Close can drain it directly — see shutdownGRPC.
+	gs *grpc.Server
 	// runCancel stops daemon-scoped background work. Only the cancel func and
 	// done channel are stored — not a context.Context (containedctx).
 	runCancel context.CancelFunc
 	runDoneCh <-chan struct{}
+	// bg tracks the background supervision loops so Close can wait for them
+	// to observe cancellation before the store closes underneath them.
+	bg sync.WaitGroup
+	// grpcShutdown makes shutdownGRPC's drain-and-close sequence run exactly
+	// once, however it's reached — see shutdownGRPC.
+	grpcShutdown sync.Once
 }
 
 // Options configures the daemon.
@@ -282,15 +300,56 @@ func New(ctx context.Context, opts Options) (*Server, error) {
 	}, nil
 }
 
-// Close releases resources. It cancels the run context so background loops
-// (auto-restart, watch dispatch) stop before the store closes, avoiding a
-// goroutine leak on New+Close without a ctx cancellation.
+// bgDrainTimeout bounds Close's wait for tracked background goroutines. Every
+// goroutine tracked in s.bg derives from runCtx (directly, or — for
+// per-process watchers — via daemonCtx, which is tied to the same runDoneCh),
+// so runCancel below provably unblocks all of them; this is a hang-safety net
+// for that invariant, not the primary mechanism, so it's set well above any
+// production or test poll/debounce/backoff interval.
+const bgDrainTimeout = 10 * time.Second
+
+// Close releases resources. It cancels the run context, drains the gRPC
+// transport (shutdownGRPC), and waits for the background loops (auto-restart,
+// watch dispatch, webhook dispatch) and any live per-process watchers
+// (started by watch.set, one goroutine each — see startWatchForProcess) to
+// observe cancellation — all before the store closes: any of them mid-query
+// while the SQLite handle shuts down is a real race, and on Windows it also
+// leaves the database file undeletable.
+//
+// In production (cmd/pmmcpd) ListenAndServe blocks until shutdown and Close
+// runs only after it returns, so shutdownGRPC has already completed by the
+// time Close calls it — a no-op via sync.Once. Tests instead run
+// ListenAndServe in a background goroutine and call Close independently
+// (concurrently, to interact with the running daemon over IPC first), so
+// without Close also driving shutdownGRPC directly, an in-flight RPC
+// handler — not tracked by bg, which only covers the daemon's own
+// goroutines, not gRPC's per-call ones — could still be running against
+// s.store after Close returned. Managed children are deliberately NOT
+// stopped: they outlive the daemon so boot relaunch can adopt live
+// predecessors.
 func (s *Server) Close() error {
-	if s.runCancel != nil {
-		s.runCancel()
+	// Set before runCancel so a watch.set racing this Close either observes
+	// closing under mu and skips its bg.Add (see the closing field comment),
+	// or its Add happens-before this store and is safely waited on below.
+	// runCancel is snapshotted under the same mu because ListenAndServe
+	// publishes it from its own goroutine.
+	s.mu.Lock()
+	s.closing = true
+	cancel := s.runCancel
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
 	}
-	if s.ln != nil {
-		_ = s.ln.Close()
+	s.shutdownGRPC()
+	drained := make(chan struct{})
+	go func() {
+		s.bg.Wait()
+		close(drained)
+	}()
+	select {
+	case <-drained:
+	case <-time.After(bgDrainTimeout):
+		slog.Warn("daemon: Close: background goroutines did not drain in time; closing store anyway", "timeout", bgDrainTimeout)
 	}
 	err := s.store.Close()
 	if s.dbStore != nil {
@@ -299,6 +358,42 @@ func (s *Server) Close() error {
 		}
 	}
 	return err
+}
+
+// shutdownGRPC gracefully stops the gRPC transport — falling back to a hard
+// Stop after gracefulStopTimeout so it never hangs on a stuck stream — closes
+// the listener, and stops any live watchers. Both ListenAndServe's own
+// ctx-cancellation goroutine and Close call this; sync.Once means whichever
+// reaches it first does the work and the other blocks until that completes,
+// so Close never proceeds to store.Close while a gRPC handler could still be
+// running. A no-op if ListenAndServe was never called (s.gs is nil).
+func (s *Server) shutdownGRPC() {
+	s.grpcShutdown.Do(func() {
+		// Snapshot under mu — ListenAndServe publishes these fields from its
+		// own goroutine (see the comments at the assignment sites).
+		s.mu.Lock()
+		gs, ln := s.gs, s.ln
+		s.mu.Unlock()
+		if gs != nil {
+			stopped := make(chan struct{})
+			go func() {
+				gs.GracefulStop()
+				close(stopped)
+			}()
+			select {
+			case <-stopped:
+			case <-time.After(s.gracefulStopTimeout):
+				// Stop() also makes an in-flight GracefulStop return, so the
+				// goroutine above still exits and closes stopped.
+				gs.Stop()
+				<-stopped
+			}
+		}
+		if ln != nil {
+			_ = ln.Close()
+		}
+		s.stopAllWatchers()
+	})
 }
 
 // ListenAndServe serves private IPC until ctx is cancelled.
@@ -310,10 +405,17 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("daemon: listen: %w", err)
 	}
+	// Published under mu: tests call Close from another goroutine, and the
+	// only other ordering between these writes and shutdownGRPC's reads runs
+	// through socket I/O, which the memory model does not order.
+	s.mu.Lock()
 	s.ln = ln
+	s.mu.Unlock()
 	runCtx, cancel := context.WithCancel(ctx)
+	s.mu.Lock()
 	s.runCancel = cancel
 	s.runDoneCh = runCtx.Done()
+	s.mu.Unlock()
 
 	if s.cfg.Relaunch.Enabled {
 		if err := s.RelaunchEligible(runCtx); err != nil {
@@ -321,36 +423,29 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 			_, _ = s.audit.Append(runCtx, audit.Record{Action: "daemon.relaunch", Detail: err.Error()})
 		}
 	}
-	// Background supervision: crash/unhealthy auto-restart for opted-in processes.
-	go s.runAutoRestartLoop(runCtx)
+	// Background supervision loops, tracked so Close can drain them before
+	// releasing the store they query.
+	s.bg.Add(3)
+	// Crash/unhealthy auto-restart for opted-in processes.
+	go func() { defer s.bg.Done(); s.runAutoRestartLoop(runCtx) }()
 	// Resume any watches that were set (in-memory only for this process lifetime).
-	go s.runWatchDispatchers(runCtx)
+	go func() { defer s.bg.Done(); s.runWatchDispatchers(runCtx) }()
 	// Deliver domain events to registered webhooks.
-	go s.runWebhookDispatch(runCtx)
+	go func() { defer s.bg.Done(); s.runWebhookDispatch(runCtx) }()
 
 	gs := grpc.NewServer()
+	s.mu.Lock()
+	s.gs = gs
+	s.mu.Unlock()
 	s.RegisterGRPC(gs)
 
 	go func() {
 		<-ctx.Done()
-		if s.runCancel != nil {
-			s.runCancel()
-		}
+		cancel()
 		// Streams derive their cancellation from runCtx (see runDone), so they
-		// return promptly; a bounded fallback hard-stops if a drain stalls so
-		// shutdown never hangs on a live stream.
-		stopped := make(chan struct{})
-		go func() {
-			gs.GracefulStop()
-			close(stopped)
-		}()
-		select {
-		case <-stopped:
-		case <-time.After(s.gracefulStopTimeout):
-			gs.Stop()
-		}
-		_ = ln.Close()
-		s.stopAllWatchers()
+		// return promptly; shutdownGRPC's own timeout is a bounded fallback if
+		// a drain stalls anyway, so shutdown never hangs on a live stream.
+		s.shutdownGRPC()
 	}()
 
 	// gRPC over private transport; peer-cred filtered listener.
@@ -1236,8 +1331,11 @@ func (s *Server) recordStartTime(id string, pid int) {
 
 // runDone returns the daemon run-context's done channel, or a nil channel
 // (which never fires in a select) when the run context is not yet set. Long
-// streams select on this so a daemon shutdown cancels them promptly.
+// streams select on this so a daemon shutdown cancels them promptly. Read
+// under mu: ListenAndServe publishes the channel from its own goroutine.
 func (s *Server) runDone() <-chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.runDoneCh
 }
 

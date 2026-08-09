@@ -24,9 +24,25 @@ import (
 	"github.com/scrothers/pmmcp/internal/service/darwin"
 )
 
+// setHome sets HOME and USERPROFILE to dir, and unsetHome clears both — the
+// darwin driver calls os.UserHomeDir, which on windows consults USERPROFILE
+// instead of HOME, so tests exercising the home-resolution branches must
+// control both env vars to behave consistently across CI platforms.
+func setHome(t *testing.T, dir string) {
+	t.Helper()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+}
+
+func unsetHome(t *testing.T) {
+	t.Helper()
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+}
+
 func TestInstallUninstall(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 
 	ctx := context.Background()
 	pmmcpd := "/opt/homebrew/bin/pmmcpd"
@@ -83,7 +99,7 @@ func TestInstallUninstall(t *testing.T) {
 
 func TestPlistPath(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	p, err := darwin.PlistPath()
 	if err != nil {
 		t.Fatalf("PlistPath: %v", err)
@@ -95,7 +111,7 @@ func TestPlistPath(t *testing.T) {
 }
 
 func TestInstallContextCanceled(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setHome(t, t.TempDir())
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if err := darwin.Install(ctx, "/opt/pmmcpd"); err == nil {
@@ -113,7 +129,7 @@ func TestLabelMatchesSpec(t *testing.T) {
 }
 
 func TestInstallEmptyPath(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setHome(t, t.TempDir())
 	if err := darwin.Install(context.Background(), ""); err == nil {
 		t.Fatal("want error for empty path")
 	}
@@ -121,7 +137,7 @@ func TestInstallEmptyPath(t *testing.T) {
 
 func TestInstallEscapesPath(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	pmmcpd := "/Applications/My & Tools/pmmcpd"
 	if err := darwin.Install(context.Background(), pmmcpd); err != nil {
 		t.Fatalf("Install: %v", err)
@@ -140,28 +156,28 @@ func TestInstallEscapesPath(t *testing.T) {
 }
 
 func TestInstallRejectsControlChars(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setHome(t, t.TempDir())
 	if err := darwin.Install(context.Background(), "/opt/pmmcpd\n<key>evil</key>"); err == nil {
 		t.Fatal("want error for control characters in path")
 	}
 }
 
 func TestInstallHomeDirError(t *testing.T) {
-	t.Setenv("HOME", "")
+	unsetHome(t)
 	if err := darwin.Install(context.Background(), "/opt/pmmcpd"); err == nil {
 		t.Fatal("want error when $HOME is unset")
 	}
 }
 
 func TestUninstallHomeDirError(t *testing.T) {
-	t.Setenv("HOME", "")
+	unsetHome(t)
 	if err := darwin.Uninstall(context.Background()); err == nil {
 		t.Fatal("want error when $HOME is unset")
 	}
 }
 
 func TestPlistPathHomeDirError(t *testing.T) {
-	t.Setenv("HOME", "")
+	unsetHome(t)
 	if _, err := darwin.PlistPath(); err == nil {
 		t.Fatal("want error when $HOME is unset")
 	}
@@ -169,7 +185,7 @@ func TestPlistPathHomeDirError(t *testing.T) {
 
 func TestInstallMkdirError(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	// A regular file where the LaunchAgents parent directory should be
 	// forces MkdirAll to fail with "not a directory".
 	if err := os.WriteFile(filepath.Join(home, "Library"), []byte("not a dir"), 0o644); err != nil {
@@ -182,7 +198,7 @@ func TestInstallMkdirError(t *testing.T) {
 
 func TestInstallWriteFileError(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	dir := filepath.Join(home, "Library", "LaunchAgents")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -198,7 +214,7 @@ func TestInstallWriteFileError(t *testing.T) {
 
 func TestUninstallRemoveError(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	dir := filepath.Join(home, "Library", "LaunchAgents")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
