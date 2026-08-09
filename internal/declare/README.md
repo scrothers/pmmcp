@@ -44,4 +44,4 @@ Hermetic unit tests in `declare_test.go` (`t.Parallel`, stdlib `testing` only). 
 
 - [`internal/daemon`](../daemon) — validate/diff/apply/import handlers
 - [`internal/api`](../api) — `declare.*` method constants and payloads
-- See also: `https://github.com/scrothers/pmmcp/wiki/Declarative`, 
+- See also: [Declarative](https://github.com/scrothers/pmmcp/wiki/Declarative)
