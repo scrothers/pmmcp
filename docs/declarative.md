@@ -162,7 +162,7 @@ This strictness is deliberate and asymmetric: the *imperative* `pm_start` trusts
 
 ## Importing existing definitions
 
-Coming from `foreman`/`honcho` or Compose? Import an existing file into a `pmmcp.yaml` starting point:
+Coming from `foreman` or `honcho`? Import an existing Procfile into a `pmmcp.yaml` starting point:
 
 ```bash
 pmmcp import path=Procfile

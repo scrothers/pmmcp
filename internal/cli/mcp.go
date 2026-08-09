@@ -96,6 +96,298 @@ func specializedSchemas() map[string]map[string]any {
 				"limit":      map[string]any{"type": "integer"},
 			},
 		},
+		"pm_events_subscribe": {
+			"type": "object",
+			"properties": map[string]any{
+				"process_id": map[string]any{"type": "string", "description": "optional; scopes the preview to one process"},
+			},
+		},
+		"pm_events_subscriptions": emptySchema(),
+		"pm_events_unsubscribe": {
+			"type": "object",
+			"properties": map[string]any{
+				"id": map[string]any{"type": "string"},
+			},
+			"required": []string{"id"},
+		},
+		"pm_group_create": {
+			"type": "object",
+			"properties": map[string]any{
+				"id":         map[string]any{"type": "string", "description": "grp- id; auto-generated when omitted"},
+				"name":       map[string]any{"type": "string"},
+				"project_id": map[string]any{"type": "string"},
+				"project":    map[string]any{"type": "string", "description": "alias for project_id"},
+				"members": map[string]any{
+					"type": "array",
+					"items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"name":       map[string]any{"type": "string"},
+							"process_id": map[string]any{"type": "string"},
+							"depends_on": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+						},
+						"required": []string{"name"},
+					},
+				},
+			},
+			"required": []string{"name"},
+		},
+		"pm_group_list": {
+			"type": "object",
+			"properties": map[string]any{
+				"project_id": map[string]any{"type": "string"},
+				"project":    map[string]any{"type": "string", "description": "alias for project_id"},
+			},
+		},
+		"pm_group_remove": {
+			"type": "object",
+			"properties": map[string]any{
+				"id": map[string]any{"type": "string"},
+			},
+			"required": []string{"id"},
+		},
+		"pm_group_restart": groupSelectorSchema(),
+		"pm_group_start":   groupSelectorSchema(),
+		"pm_group_status":  groupSelectorSchema(),
+		"pm_group_stop":    groupSelectorSchema(),
+		"pm_logs_export": {
+			"type": "object",
+			"properties": map[string]any{
+				"id":      map[string]any{"type": "string"},
+				"name":    map[string]any{"type": "string"},
+				"project": map[string]any{"type": "string"},
+			},
+		},
+		"pm_logs_ship": {
+			"type": "object",
+			"properties": map[string]any{
+				"export_path": map[string]any{"type": "string", "description": "path from a prior pm_logs_export"},
+				"sink_path":   map[string]any{"type": "string", "description": "destination path; must not already exist"},
+				"path":        map[string]any{"type": "string", "description": "alias for sink_path"},
+			},
+			"required": []string{"export_path"},
+		},
+		"pm_logs_subscribe": {
+			"type": "object",
+			"properties": map[string]any{
+				"process_id": map[string]any{"type": "string", "description": "optional; scopes the short preview follow to one process"},
+			},
+		},
+		"pm_logs_unsubscribe": {
+			"type": "object",
+			"properties": map[string]any{
+				"id": map[string]any{"type": "string"},
+			},
+			"required": []string{"id"},
+		},
+		"pm_metrics_snapshot": emptySchema(),
+		"pm_profile_create": {
+			"type": "object",
+			"properties": map[string]any{
+				"id":         map[string]any{"type": "string"},
+				"name":       map[string]any{"type": "string", "description": "defaults to \"default\" when omitted"},
+				"project_id": map[string]any{"type": "string", "description": "required (or project alias)"},
+				"project":    map[string]any{"type": "string", "description": "alias for project_id"},
+				"env":        map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}},
+			},
+		},
+		"pm_profile_delete": {
+			"type": "object",
+			"properties": map[string]any{
+				"id": map[string]any{"type": "string"},
+			},
+			"required": []string{"id"},
+		},
+		"pm_profile_get": {
+			"type": "object",
+			"properties": map[string]any{
+				"id": map[string]any{"type": "string"},
+			},
+			"required": []string{"id"},
+		},
+		"pm_profile_list": {
+			"type": "object",
+			"properties": map[string]any{
+				"project_id": map[string]any{"type": "string"},
+				"project":    map[string]any{"type": "string", "description": "alias for project_id"},
+			},
+		},
+		"pm_profile_update": {
+			"type": "object",
+			"properties": map[string]any{
+				"id":   map[string]any{"type": "string"},
+				"name": map[string]any{"type": "string"},
+				"env":  map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": "replaces the full env map when provided"},
+			},
+			"required": []string{"id"},
+		},
+		"pm_profile_use": {
+			"type": "object",
+			"properties": map[string]any{
+				"name":    map[string]any{"type": "string"},
+				"session": map[string]any{"type": "string", "description": "defaults to the caller's session; a new session is opened if none exists"},
+			},
+		},
+		"pm_session_end": {
+			"type": "object",
+			"properties": map[string]any{
+				"id": map[string]any{"type": "string", "description": "session id to end; defaults to the caller's own session"},
+			},
+		},
+		"pm_session_info": emptySchema(),
+		"pm_share": {
+			"type": "object",
+			"properties": map[string]any{
+				"target":     map[string]any{"type": "string", "description": "resource id being shared (e.g. a process id)"},
+				"to_session": map[string]any{"type": "string"},
+				"cap":        map[string]any{"type": "string", "description": "capability name to grant"},
+			},
+			"required": []string{"target", "to_session"},
+		},
+		"pm_unshare": {
+			"type": "object",
+			"properties": map[string]any{
+				"target":     map[string]any{"type": "string"},
+				"to_session": map[string]any{"type": "string"},
+				"cap":        map[string]any{"type": "string", "description": "capability to revoke; omit to revoke all grants for the pair"},
+			},
+			"required": []string{"target", "to_session"},
+		},
+		"pm_apply": {
+			"type": "object",
+			"properties": map[string]any{
+				"yaml": map[string]any{"type": "string", "description": "one of yaml, data, or path required"},
+				"path": map[string]any{"type": "string"},
+				"data": map[string]any{"type": "string"},
+			},
+		},
+		"pm_audit_query": {
+			"type": "object",
+			"properties": map[string]any{
+				"target": map[string]any{"type": "string"},
+				"limit":  map[string]any{"type": "integer"},
+			},
+		},
+		"pm_daemon_info":   emptySchema(),
+		"pm_daemon_reload": emptySchema(),
+		"pm_declare_show": {
+			"type": "object",
+			"properties": map[string]any{
+				"yaml": map[string]any{"type": "string", "description": "one of yaml, data, or path required"},
+				"path": map[string]any{"type": "string"},
+				"data": map[string]any{"type": "string"},
+			},
+		},
+		"pm_diff": {
+			"type": "object",
+			"properties": map[string]any{
+				"yaml":          map[string]any{"type": "string", "description": "one of yaml, data, or path required"},
+				"path":          map[string]any{"type": "string"},
+				"data":          map[string]any{"type": "string"},
+				"running_names": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "override the live process set to diff against; defaults to actually-running names"},
+			},
+		},
+		"pm_import": {
+			"type": "object",
+			"properties": map[string]any{
+				"data":   map[string]any{"type": "string", "description": "one of data or path required"},
+				"path":   map[string]any{"type": "string"},
+				"format": map[string]any{"type": "string", "description": "only \"procfile\" (default) is supported"},
+			},
+		},
+		"pm_ports": idNameSchema(),
+		"pm_project_current": {
+			"type": "object",
+			"properties": map[string]any{
+				"cwd": map[string]any{"type": "string", "description": "defaults to the daemon's own cwd when omitted"},
+			},
+		},
+		"pm_project_list":     emptySchema(),
+		"pm_runtime_info":     emptySchema(),
+		"pm_sandbox_profiles": emptySchema(),
+		"pm_secret_list":      emptySchema(),
+		"pm_secret_ref_check": {
+			"type": "object",
+			"properties": map[string]any{
+				"ref":  map[string]any{"type": "string", "description": "secret:// URI; one of ref or name required"},
+				"name": map[string]any{"type": "string"},
+				"path": map[string]any{"type": "string", "description": "optional project root for ref resolution"},
+			},
+		},
+		"pm_secret_set": {
+			"type": "object",
+			"properties": map[string]any{
+				"name":  map[string]any{"type": "string"},
+				"path":  map[string]any{"type": "string", "description": "one of path or value required"},
+				"value": map[string]any{"type": "string", "description": "SECURITY: stored in the keyring, but passed as a literal MCP tool argument — visible to the agent harness/logs unlike the CLI's stdin-only pmmcp secret set. Prefer a path ref; avoid value for real secrets."},
+			},
+			"required": []string{"name"},
+		},
+		"pm_update": {
+			"type": "object",
+			"properties": map[string]any{
+				"id":      map[string]any{"type": "string"},
+				"name":    map[string]any{"type": "string"},
+				"project": map[string]any{"type": "string"},
+				"command": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"cwd":     map[string]any{"type": "string"},
+				"env":     map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}},
+				"restart": map[string]any{"type": "boolean", "description": "apply changes by restarting the process"},
+			},
+		},
+		"pm_validate": {
+			"type": "object",
+			"properties": map[string]any{
+				"yaml": map[string]any{"type": "string", "description": "one of yaml, data, or path required"},
+				"path": map[string]any{"type": "string"},
+				"data": map[string]any{"type": "string"},
+			},
+		},
+		"pm_watch_set": {
+			"type": "object",
+			"properties": map[string]any{
+				"id":      map[string]any{"type": "string"},
+				"name":    map[string]any{"type": "string"},
+				"project": map[string]any{"type": "string"},
+				"path":    map[string]any{"type": "string"},
+			},
+			"required": []string{"path"},
+		},
+		"pm_watch_status": emptySchema(),
+		"pm_webhook_create": {
+			"type": "object",
+			"properties": map[string]any{
+				"id":     map[string]any{"type": "string", "description": "optional; auto-generated (wh-…) when omitted"},
+				"url":    map[string]any{"type": "string"},
+				"events": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			},
+			"required": []string{"url"},
+		},
+		"pm_webhook_delete": {
+			"type": "object",
+			"properties": map[string]any{
+				"id": map[string]any{"type": "string"},
+			},
+			"required": []string{"id"},
+		},
+		"pm_webhook_list": emptySchema(),
+		"pm_webhook_test": {
+			"type": "object",
+			"properties": map[string]any{
+				"id": map[string]any{"type": "string"},
+			},
+			"required": []string{"id"},
+		},
+		"pm_webhook_update": {
+			"type": "object",
+			"properties": map[string]any{
+				"id":     map[string]any{"type": "string"},
+				"url":    map[string]any{"type": "string"},
+				"events": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			},
+			"required": []string{"id"},
+		},
+		"pm_whoami": emptySchema(),
 	}
 }
 
@@ -104,6 +396,31 @@ func idNameSchema() map[string]any {
 		"type": "object",
 		"properties": map[string]any{
 			"id": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"},
+		},
+	}
+}
+
+// emptySchema is the explicit schema for tools that take no arguments — a
+// deliberate declaration (additionalProperties: false), distinct from the
+// generic fallback whose empty properties mean "unknown", not "none".
+func emptySchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"properties":           map[string]any{},
+		"additionalProperties": false,
+	}
+}
+
+// groupSelectorSchema is the shared id-or-name group selector (with optional
+// project scoping) used by the group lifecycle tools.
+func groupSelectorSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"id":         map[string]any{"type": "string"},
+			"name":       map[string]any{"type": "string"},
+			"project_id": map[string]any{"type": "string"},
+			"project":    map[string]any{"type": "string", "description": "alias for project_id"},
 		},
 	}
 }
