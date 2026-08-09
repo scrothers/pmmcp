@@ -33,7 +33,7 @@
 ## touch map
 | Change | Also touch |
 |--------|------------|
-| URI schemes / ParseRef | daemon secret handlers, docs/secrets.md, SECURITY.md |
+| URI schemes / ParseRef | daemon secret handlers, https://github.com/scrothers/pmmcp/wiki/Secrets, SECURITY.md |
 | Redaction patterns/placeholder | logcap RedactWriter, daemon status dumps |
 | FileBackend perms | install paths, doctor checks |
 | SOPS dependency | go.mod isolation; prefer not expanding cloud SDKs further without review |
@@ -46,4 +46,4 @@
 - Chase 100% coverage via unnatural crypto failures.
 
 ## related
-- `internal/authz` (CapSecretsReadValues / CapSecretSet), `internal/logcap`, `docs/secrets.md`
+- `internal/authz` (CapSecretsReadValues / CapSecretSet), `internal/logcap`, `https://github.com/scrothers/pmmcp/wiki/Secrets`

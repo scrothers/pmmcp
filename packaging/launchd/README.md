@@ -2,7 +2,7 @@
 
 `pmmcpd` runs as a **per-user LaunchAgent** — one daemon per macOS user, in the
 user's own launchd domain. Never a system-wide LaunchDaemon: the same-user
-socket is the trust boundary ([docs/security.md](../../docs/security.md)).
+socket is the trust boundary ([Security](https://github.com/scrothers/pmmcp/wiki/Security)).
 
 ## Recommended: let pmmcp generate it
 

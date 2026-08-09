@@ -125,11 +125,11 @@ go install github.com/scrothers/pmmcp/cmd/pmmcpd@latest
 }
 ```
 
-MCP protocol → **[docs/mcp.md](docs/mcp.md)** · per-harness setup → **[docs/integration/](docs/integration/README.md)**
+MCP protocol → **[MCP integration](https://github.com/scrothers/pmmcp/wiki/MCP)** · per-harness setup → **[Integrations](https://github.com/scrothers/pmmcp/wiki/Integrations)**
 
 </details>
 
-First supervised process in ~10 minutes → **[docs/quickstart.md](docs/quickstart.md)** · Install → **[docs/install.md](docs/install.md)**
+First supervised process in ~10 minutes → **[Quickstart](https://github.com/scrothers/pmmcp/wiki/Quickstart)** · Install → **[Installation](https://github.com/scrothers/pmmcp/wiki/Installation)**
 
 ---
 
@@ -233,7 +233,7 @@ services:
     depends_on: [web]
 ```
 
-Import a legacy **Procfile**, review warnings, apply with eyes open → **[docs/declarative.md](docs/declarative.md)**
+Import a legacy **Procfile**, review warnings, apply with eyes open → **[Declarative](https://github.com/scrothers/pmmcp/wiki/Declarative)**
 
 ---
 
@@ -260,8 +260,8 @@ Import a legacy **Procfile**, review warnings, apply with eyes open → **[docs/
 | **Authz** | Capability matrix + roles (`readonly` · `agent` · `operator` · `full`) |
 | **Identity** | Prefixed Crockford-base32 ULIDs — `proc-` · `grp-` · `evt-` · `aud-` · `sess-` |
 
-Deep mental model → **[docs/concepts.md](docs/concepts.md)**<br/>
-Threat model → **[SECURITY.md](SECURITY.md)** · **[docs/security.md](docs/security.md)**
+Deep mental model → **[Concepts](https://github.com/scrothers/pmmcp/wiki/Concepts)**<br/>
+Threat model → **[SECURITY.md](SECURITY.md)** · **[Security](https://github.com/scrothers/pmmcp/wiki/Security)**
 
 ---
 
@@ -288,21 +288,21 @@ task verify                              # full local proof
 
 | Path | For |
 |------|-----|
-| **[docs/README.md](docs/README.md)** | Documentation home |
-| **[docs/concepts.md](docs/concepts.md)** | Mental model — **read this first** |
-| **[docs/install.md](docs/install.md)** | Build, install, user service |
-| **[docs/quickstart.md](docs/quickstart.md)** | First supervised process in ~10 minutes |
-| **[docs/cli.md](docs/cli.md)** | CLI reference |
-| **[docs/mcp.md](docs/mcp.md)** | Agent & MCP protocol (tools, resources, prompts) |
-| **[docs/integration/](docs/integration/README.md)** | Wire Claude, Grok, OpenCode, Codex, Cursor, … |
-| **[docs/security.md](docs/security.md)** | Isolation, trust, capabilities |
-| **[docs/supervision.md](docs/supervision.md)** | Groups, health, restart, boot |
-| **[docs/logs-and-events.md](docs/logs-and-events.md)** | Logs · events · audit · ports · metrics |
-| **[docs/secrets.md](docs/secrets.md)** | Env files · keyring · SOPS · redaction |
-| **[docs/declarative.md](docs/declarative.md)** | `pmmcp.yaml` · import · apply |
-| **[docs/operations.md](docs/operations.md)** | Runbook · multi-user · upgrade |
-| **[docs/configuration.md](docs/configuration.md)** | Daemon config reference |
-| **[docs/reference-errors.md](docs/reference-errors.md)** | Error codes & exit codes |
+| **[wiki](https://github.com/scrothers/pmmcp/wiki)** | Documentation home |
+| **[Concepts](https://github.com/scrothers/pmmcp/wiki/Concepts)** | Mental model — **read this first** |
+| **[Installation](https://github.com/scrothers/pmmcp/wiki/Installation)** | Build, install, user service |
+| **[Quickstart](https://github.com/scrothers/pmmcp/wiki/Quickstart)** | First supervised process in ~10 minutes |
+| **[CLI reference](https://github.com/scrothers/pmmcp/wiki/CLI)** | CLI reference |
+| **[MCP integration](https://github.com/scrothers/pmmcp/wiki/MCP)** | Agent & MCP protocol (tools, resources, prompts) |
+| **[Integrations](https://github.com/scrothers/pmmcp/wiki/Integrations)** | Wire Claude, Grok, OpenCode, Codex, Cursor, … |
+| **[Security](https://github.com/scrothers/pmmcp/wiki/Security)** | Isolation, trust, capabilities |
+| **[Supervision](https://github.com/scrothers/pmmcp/wiki/Supervision)** | Groups, health, restart, boot |
+| **[Logs & events](https://github.com/scrothers/pmmcp/wiki/Logs-and-Events)** | Logs · events · audit · ports · metrics |
+| **[Secrets](https://github.com/scrothers/pmmcp/wiki/Secrets)** | Env files · keyring · SOPS · redaction |
+| **[Declarative](https://github.com/scrothers/pmmcp/wiki/Declarative)** | `pmmcp.yaml` · import · apply |
+| **[Operations](https://github.com/scrothers/pmmcp/wiki/Operations)** | Runbook · multi-user · upgrade |
+| **[Configuration](https://github.com/scrothers/pmmcp/wiki/Configuration)** | Daemon config reference |
+| **[Error reference](https://github.com/scrothers/pmmcp/wiki/Error-Reference)** | Error codes & exit codes |
 | **[CONTRIBUTING.md](CONTRIBUTING.md)** | Development workflow |
 | **[AGENTS.md](AGENTS.md)** | Project law for coding agents |
 | **[SECURITY.md](SECURITY.md)** | Vulnerability reporting & model summary |
@@ -345,7 +345,7 @@ CI (`.github/workflows/ci.yml`): **Linux · macOS · Windows** unit tests; Linux
 ## 👥 Multi-user hosts
 
 Each OS user runs **their own** daemon and socket. No shared control plane.
-See [docs/operations.md → Multiple OS users](docs/operations.md#multiple-os-users).
+See [https://github.com/scrothers/pmmcp/wiki/Operations → Multiple OS users](https://github.com/scrothers/pmmcp/wiki/Operations#multiple-os-users).
 
 ---
 

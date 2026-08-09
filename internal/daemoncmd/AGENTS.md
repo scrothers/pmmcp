@@ -26,7 +26,7 @@ Thin cobra command tree for the **`pmmcpd`** binary. Keeps `cmd/pmmcpd` minimal:
 - Unit tests hermetic (`t.Parallel()` when safe). **Coverage floor: ≥80% statements** for this package (CI). Do not add production seams only to hit residual lines. Meaningful assertions beat line hits.
 
 ## touch map
-- New daemon CLI flags → `config.RegisterDaemonFlags` + docs/configuration.md
+- New daemon CLI flags → `config.RegisterDaemonFlags` + https://github.com/scrothers/pmmcp/wiki/Configuration
 - Serve lifecycle changes → `internal/daemon`, not this package
 
 ## do-not
@@ -35,4 +35,4 @@ Thin cobra command tree for the **`pmmcpd`** binary. Keeps `cmd/pmmcpd` minimal:
 - Swallow context cancel or detach from main’s signal handling.
 
 ## related
-`internal/daemon`, `cmd/pmmcpd`, `docs/operations.md`
+`internal/daemon`, `cmd/pmmcpd`, `https://github.com/scrothers/pmmcp/wiki/Operations`

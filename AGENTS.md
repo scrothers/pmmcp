@@ -14,7 +14,7 @@ Self-contained: you do not need host-level CLAUDE.md or external house rules to 
 1. **This file** — global product, security, architecture, testing, and workflow law.
 2. **`internal/<pkg>/AGENTS.md`** for every package you will touch (see schema below).
 3. **Code** — briefs can lag; when in doubt, the code and tests win for local facts, but they must not violate this file’s security or architecture law.
-4. **`docs/`** — human-facing behavior and UX wording when the change is user-visible.
+4. **The GitHub wiki** (https://github.com/scrothers/pmmcp/wiki, repo `scrothers/pmmcp.wiki.git`) — human-facing behavior and UX wording when the change is user-visible.
 
 **Hierarchy:** package `AGENTS.md` files **specialize**; they **never override** root security, architecture, coverage doctrine, or parity rules.
 
@@ -104,7 +104,7 @@ All of the following must stay in sync:
 3. `internal/cli` — `ToolMethod` + `ToolDescription`.
 4. CLI verb **or** an entry in intentional omissions (documented why).
 5. Tests that enforce catalog parity (`catalog_test.go` and friends).
-6. User-visible docs under `docs/` when behavior is user-facing.
+6. User-visible docs in the GitHub wiki when behavior is user-facing.
 
 **Current pin:** **65** `pm_*` tools in `ToolMethod`. `api.AllMethods` is larger by design (includes `hello` handshake and any non-tool methods). Changing the tool count is deliberate product work, not a drive-by.
 
@@ -135,7 +135,7 @@ All of the following must stay in sync:
 | `internal/api/gen/` | **Generated** gRPC stubs — do not hand-edit |
 | `test/integration/` | `//go:build integration` |
 | `test/e2e/` | `//go:build e2e` |
-| `docs/` | Product documentation |
+| GitHub wiki (`scrothers/pmmcp.wiki.git`) | Product documentation |
 | `packaging/` | systemd / launchd / windows service artifacts |
 | `scripts/` | license header check/fix |
 | `Taskfile.yml` | Local tasks: build, test, lint, license, verify |
@@ -278,7 +278,7 @@ Build tags are load-bearing: integration/e2e must not compile in the default sui
 1. `internal/api` method + types + `AllMethods`.
 2. Daemon handler + authz.
 3. `cli.ToolMethod` + `ToolDescription` + CLI verb or omission.
-4. Parity tests green; update `docs/` if user-visible.
+4. Parity tests green; update the wiki if user-visible.
 5. Do not ship a tool that returns raw secret values to agents.
 
 ### Add a process or engine driver
@@ -301,11 +301,11 @@ Build tags are load-bearing: integration/e2e must not compile in the default sui
 1. Re-read **Security model** in this file.
 2. Prefer fail-closed behavior.
 3. Tests for deny paths matter more than happy-path paint.
-4. Update `SECURITY.md` / `docs/security.md` / `docs/secrets.md` when the model changes.
+4. Update `SECURITY.md` / `https://github.com/scrothers/pmmcp/wiki/Security` / `https://github.com/scrothers/pmmcp/wiki/Secrets` when the model changes.
 
 ### User-visible behavior
 
-Update `docs/` (and README only if the top-level story changes). Code comments are not a substitute for docs.
+Update the GitHub wiki (and README only if the top-level story changes). Code comments are not a substitute for docs.
 
 ---
 
@@ -331,7 +331,7 @@ Coverage check (Linux CI shape): `go test -cover ./internal/...` — every non-g
 - [ ] Tests cover the **behavior** (not residual unreachable lines)
 - [ ] `gofmt` / `vet` / lint clean
 - [ ] New/changed Go files have license headers (`task license`)
-- [ ] Catalog/docs/parity updated when tools or UX change
+- [ ] Catalog/wiki/parity updated when tools or UX change
 - [ ] Package `AGENTS.md` updated if surface or invariants changed
 - [ ] No security regress (sandbox, secrets, peer cred, SSRF)
 - [ ] No dependency bulk without justification
@@ -386,12 +386,12 @@ Coverage check (Linux CI shape): `go test -cover ./internal/...` — every non-g
 |------|----------|
 | Package index | `internal/AGENTS.md` |
 | Package brief | `internal/<pkg>/AGENTS.md` |
-| Human product docs | `docs/` |
+| Human product docs | GitHub wiki |
 | Security policy | `SECURITY.md` |
 | Contributing (short) | `CONTRIBUTING.md` |
-| Secrets guide | `docs/secrets.md` |
-| MCP overview | `docs/mcp.md` |
-| Harness integrations | `docs/integration/` |
+| Secrets guide | `https://github.com/scrothers/pmmcp/wiki/Secrets` |
+| MCP overview | `https://github.com/scrothers/pmmcp/wiki/MCP` |
+| Harness integrations | `https://github.com/scrothers/pmmcp/wiki/Integrations` |
 | CI | `.github/workflows/ci.yml` |
 
 When this file and a package brief disagree on **global** law, **this file wins**. When they disagree on **local symbols**, re-read the code and fix the brief.

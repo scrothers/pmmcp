@@ -26,7 +26,7 @@ Closes #
 ## Parity & docs (when applicable)
 
 - [ ] New/changed `pm_*` tool: catalog (`ToolMethod` + `ToolDescription`) + daemon handler + CLI verb (or documented omission) all updated together
-- [ ] User-facing behavior changed → `docs/` updated
+- [ ] User-facing behavior changed → wiki updated (https://github.com/scrothers/pmmcp/wiki)
 - [ ] Package behavior changed → its `internal/**/AGENTS.md` / `README.md` still accurate
 - [ ] Security-relevant change (sandbox, authz, secrets, IPC) → called out below
 

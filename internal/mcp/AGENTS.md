@@ -16,7 +16,7 @@ SDK-agnostic MCP **resources** and **prompts** helpers for the `pmmcp mcp` stdio
 | `Prompt` / `PromptArg` | Prompt descriptors |
 | `ListPrompts` | Maps `prompts.List` → MCP shapes |
 | `GetPrompt(name, args)` | `prompts.Render` only |
-| Static URIs | `pmmcp: / processes`, `daemon`, `project/current`, `declare`, `ports`, `events/recent`, `docs/error-codes`, `docs/tool-index` |
+| Static URIs | `pmmcp://processes`, `daemon`, `project/current`, `declare`, `ports`, `events/recent`, `docs/error-codes`, `docs/tool-index` |
 | Templates | `pmmcp: / project/{id}`, `process/{name_or_id}`, `process/{name_or_id}/log`, `group/{name}` |
 
 ## deps
@@ -80,4 +80,4 @@ SDK-agnostic MCP **resources** and **prompts** helpers for the `pmmcp mcp` stdio
 - Human overview: [`README.md`](README.md)
 - Consumer: [`../cli/AGENTS.md`](../cli/AGENTS.md) (`runMCPSDK`)
 - Bodies: [`../prompts/`](../prompts/)
-- Docs: `docs/mcp.md`
+- Docs: `https://github.com/scrothers/pmmcp/wiki/MCP`

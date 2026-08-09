@@ -49,6 +49,6 @@ All unit tests are hermetic (`t.TempDir`). Coverage includes defaults, rotate+gz
 ## Related
 
 - ADRs: 013-logs-and-events, 014-secrets-handling
-- See also: `docs/secrets.md`
+- See also: `https://github.com/scrothers/pmmcp/wiki/Secrets`
 - Consumers: `internal/process/local`, `internal/daemon`
 - Sibling: `internal/secret` (redact rules)

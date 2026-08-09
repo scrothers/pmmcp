@@ -2,7 +2,7 @@
 
 `pmmcpd` runs as a **user** service — one daemon per OS user, no system-wide
 control plane. That is the trust model, not a limitation
-([docs/security.md](../../docs/security.md)).
+([Security](https://github.com/scrothers/pmmcp/wiki/Security)).
 
 ## Desktop / interactive use
 

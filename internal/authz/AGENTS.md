@@ -32,7 +32,7 @@
 ## touch map
 | Change | Also touch |
 |--------|------------|
-| Capability constants / role packs | daemon handler Require calls, docs/authz, CLI role docs |
+| Capability constants / role packs | daemon handler Require calls, the Security wiki page, CLI role docs |
 | Default role on empty | IPC session attribution |
 | ShareBook semantics | `pm_share` / `pm_unshare` handlers + audit |
 

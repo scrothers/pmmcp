@@ -58,4 +58,4 @@ Same-UID malware on the host can still talk to the daemon — sandboxing protect
 - `internal/webhook` — SSRF rejection 
 - `internal/authz` — capability matrix 
 
-Full gate matrix: [docs/stages.md](docs/stages.md).
+Full quality gate: `task verify` locally and `.github/workflows/ci.yml` in CI.

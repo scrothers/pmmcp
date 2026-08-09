@@ -22,7 +22,7 @@ import (
 // Code is a stable machine-readable error code for CLI/MCP/gRPC mapping.
 type Code string
 
-// Well-known error codes (docs/reference-errors.md + exit map).
+// Well-known error codes (https://github.com/scrothers/pmmcp/wiki/Error-Reference + exit map).
 const (
 	CodeNotFound           Code = "not_found"
 	CodeConflict           Code = "conflict"
@@ -86,7 +86,7 @@ type Error struct {
 	Message   string
 	Retryable bool
 	// Details carries structured, machine-branchable context for the error
-	// envelope (docs/reference-errors.md), e.g. {"name": "api"}. Optional.
+	// envelope (https://github.com/scrothers/pmmcp/wiki/Error-Reference), e.g. {"name": "api"}. Optional.
 	Details map[string]any
 	Err     error
 }

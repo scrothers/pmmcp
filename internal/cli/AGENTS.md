@@ -55,7 +55,7 @@ Thin `pmmcp` client: cobra command tree, MCP tool catalog (`ToolMethod` / `ToolD
 3. **`ToolMethod` + `ToolDescription` source** (`prompts` lines for description).
 4. Either **`cliVerbs`** + cobra command, or **`IntentionalCLIOmissions`** with reason.
 5. Specialized schema in `specializedSchemas()` when the tool needs non-empty input shape.
-6. Green: `catalog_test.go`, daemon parity, user-facing `docs/` if behavior changes.
+6. Green: `catalog_test.go`, daemon parity, user-facing wiki pages if behavior changes.
 7. Update frozen count only deliberately (`TestToolMethodCount` want=65).
 
 ### Add a CLI-only verb (no MCP tool)

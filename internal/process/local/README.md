@@ -72,7 +72,7 @@ Default stop timeout is **10 seconds** when the caller passes a non-positive dur
 | `strict` / `standard` | bwrap required | sandbox-exec required | Job Object required for assignment | error |
 | `permissive` / `off` / empty | no wrap | no wrap | job best-effort | no wrap |
 
-See also [`docs/security.md`](../../../docs/security.md) and /.
+See also [Security](https://github.com/scrothers/pmmcp/wiki/Security).
 
 ## Files (by concern)
 

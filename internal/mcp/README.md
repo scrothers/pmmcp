@@ -55,7 +55,7 @@ Currently minimal/no unit tests; cover via CLI MCP integration or add table test
 ## Related
 
 - MCP SDK choice at the CLI boundary; this package stays a thin adapter
-- See also: `docs/mcp.md`
-- Docs: `docs/mcp.md`
+- See also: `https://github.com/scrothers/pmmcp/wiki/MCP`
+- Docs: `https://github.com/scrothers/pmmcp/wiki/MCP`
 - Consumers: `internal/cli`
 - Transport: `internal/ipc`

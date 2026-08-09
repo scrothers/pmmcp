@@ -4,8 +4,8 @@ contact_links:
     url: https://github.com/scrothers/pmmcp/security/advisories/new
     about: Private vulnerability reporting — never open a public issue for exploit details. See SECURITY.md.
   - name: 📚 Documentation
-    url: https://github.com/scrothers/pmmcp/blob/main/docs/README.md
+    url: https://github.com/scrothers/pmmcp/wiki
     about: Concepts, quickstart, CLI reference, MCP integration, operations runbook.
   - name: 🤖 Agent & MCP integration guide
-    url: https://github.com/scrothers/pmmcp/blob/main/docs/mcp.md
+    url: https://github.com/scrothers/pmmcp/wiki/MCP
     about: Wiring pmmcp into an MCP harness, tool catalog, resources, and prompts.
