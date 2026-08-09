@@ -130,7 +130,7 @@ func newTestDaemonOpts(t *testing.T, tweak func(*config.Config), optsTweak func(
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	opts := daemon.Options{
-		Config: cfg, DBPath: filepath.Join(dir, "db.sqlite"), Manager: mgr,
+		Config: cfg, DBPath: sqliteDBPathForTest(t), Manager: mgr,
 		// Fast test clocks: same code paths as production, just quicker ticks
 		// and follow windows so handler tests don't wait out second-scale
 		// production intervals.

@@ -120,7 +120,7 @@ func bootParityDaemon(t *testing.T) (context.Context, context.CancelFunc, *ipc.C
 	cfg.Webhook.Allowlist = []string{"*.example.com"}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "t.db")})
+	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}

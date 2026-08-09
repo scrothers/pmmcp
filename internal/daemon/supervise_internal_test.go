@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -65,6 +66,33 @@ func stopAllSuperviseForTest(ctx context.Context, t *testing.T, s *Server) {
 	}
 }
 
+// sqliteDBPathForTest is the package-daemon (white-box) twin of the identical
+// helper in product_test.go (package daemon_test) — see its comment there for
+// the full rationale. Duplicated rather than shared because the two test
+// suites are different packages.
+func sqliteDBPathForTest(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return filepath.Join(t.TempDir(), "db.sqlite")
+	}
+	dbDir, err := os.MkdirTemp("", "pmmcp-db-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		deadline := time.Now().Add(2 * time.Second)
+		var rmErr error
+		for time.Now().Before(deadline) {
+			if rmErr = os.RemoveAll(dbDir); rmErr == nil {
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		t.Logf("sqliteDBPathForTest: %s still busy after retrying for 2s: %v", dbDir, rmErr)
+	})
+	return filepath.Join(dbDir, "db.sqlite")
+}
+
 // newSuperviseTestServer builds a real *Server (real local process manager, real
 // SQLite-backed store/audit/events) for whitebox tests that need direct access
 // to unexported methods (restartByID, probeRunningHealthy, startWatchForProcess,
@@ -89,7 +117,7 @@ func newSuperviseTestServer(t *testing.T, tweak func(*config.Config)) (*Server, 
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	srv, err := New(ctx, Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := New(ctx, Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +149,7 @@ func newSuperviseTestServerOpts(t *testing.T, tweak func(*config.Config), optsTw
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	opts := Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")}
+	opts := Options{Config: cfg, DBPath: sqliteDBPathForTest(t)}
 	if optsTweak != nil {
 		optsTweak(&opts)
 	}

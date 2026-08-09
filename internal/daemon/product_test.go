@@ -34,6 +34,48 @@ import (
 	"github.com/scrothers/pmmcp/internal/testsock"
 )
 
+// sqliteDBPathForTest returns the path a test should open db.sqlite at.
+//
+// On Windows this is deliberately a directory OUTSIDE t.TempDir(), with its
+// own bounded, non-failing cleanup. modernc.org/sqlite's conn.Close calls
+// sqlite3_close_v2, which — per SQLite's own semantics — defers releasing a
+// connection's handle until its internal bookkeeping (WAL auto-checkpoint,
+// briefly re-acquiring an exclusive lock) settles; that can lag Close()
+// returning by an observable amount, and only on Windows does an open
+// handle actually block deleting the file (POSIX allows unlinking a file a
+// process still has open). This was chased down across several rounds of
+// Windows CI fixes to internal/daemon's shutdown ordering (gRPC drain,
+// background-loop and per-watch-goroutine tracking, all now joined before
+// store.Close in Server.Close) without finding a remaining Go-level holder;
+// what's left reproduces at a low, steady rate (~2% of heavy daemon tests)
+// consistent with OS/library-level release timing rather than a leaked
+// goroutine. Documented concession, not a fix for a known bug — revisit if
+// a future round finds an actual holder. POSIX cleanup is unaffected: this
+// function is a no-op wrapper around t.TempDir there, so behavior everywhere
+// else in the suite is unchanged.
+func sqliteDBPathForTest(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return filepath.Join(t.TempDir(), "db.sqlite")
+	}
+	dbDir, err := os.MkdirTemp("", "pmmcp-db-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		deadline := time.Now().Add(2 * time.Second)
+		var rmErr error
+		for time.Now().Before(deadline) {
+			if rmErr = os.RemoveAll(dbDir); rmErr == nil {
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		t.Logf("sqliteDBPathForTest: %s still busy after retrying for 2s: %v", dbDir, rmErr)
+	})
+	return filepath.Join(dbDir, "db.sqlite")
+}
+
 func startTestDaemon(t *testing.T) (context.Context, context.CancelFunc, *ipc.Client, string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -51,7 +93,7 @@ func startTestDaemon(t *testing.T) (context.Context, context.CancelFunc, *ipc.Cl
 	cfg.Relaunch.Enabled = false
 	ctx, cancel := context.WithCancel(context.Background())
 	srv, err := daemon.New(ctx, daemon.Options{
-		Config: cfg, DBPath: filepath.Join(dir, "db.sqlite"),
+		Config: cfg, DBPath: sqliteDBPathForTest(t),
 		// Fast supervision clocks: same code paths as production, just quicker
 		// ticks so product tests don't wait out multi-hundred-ms intervals.
 		AutoRestartTick:     25 * time.Millisecond,
@@ -365,7 +407,7 @@ func TestSandboxRelaxRequiresCapability(t *testing.T) {
 	cfg.Relaunch.Enabled = false
 	ctx2, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	srv, err := daemon.New(ctx2, daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := daemon.New(ctx2, daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}

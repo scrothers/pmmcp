@@ -49,7 +49,7 @@ func newGRPCInternalTestServer(t *testing.T) *Server {
 		t.Fatal(err)
 	}
 	cfg.StateDir = filepath.Join(dir, "state")
-	srv, err := New(context.Background(), Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := New(context.Background(), Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}

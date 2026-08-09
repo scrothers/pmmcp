@@ -91,7 +91,7 @@ func TestListenAndServeGracefulStopFallsBackAfterTimeout(t *testing.T) {
 	cfg := newTestConfig(t, dir)
 	ctx, cancel := context.WithCancel(context.Background())
 	srv, err := daemon.New(ctx, daemon.Options{
-		Config: cfg, DBPath: filepath.Join(dir, "db.sqlite"),
+		Config: cfg, DBPath: sqliteDBPathForTest(t),
 		GracefulStopTimeout: budget,
 	})
 	if err != nil {
