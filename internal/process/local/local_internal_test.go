@@ -38,7 +38,9 @@ import (
 // group disappears with it.
 func deadPID(t *testing.T) int {
 	t.Helper()
-	cmd := exec.Command("/bin/true")
+	// "true" is resolved via PATH: it lives at /bin/true on Linux but
+	// /usr/bin/true on macOS, so a hardcoded path isn't portable.
+	cmd := exec.Command("true")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start throwaway child: %v", err)
@@ -181,7 +183,7 @@ func TestApplyMemoryLimit(t *testing.T) {
 	t.Parallel()
 	t.Run("creates SysProcAttr", func(t *testing.T) {
 		t.Parallel()
-		cmd := exec.Command("/bin/true")
+		cmd := exec.Command("true")
 		applyMemoryLimit(cmd, 1<<20)
 		if cmd.SysProcAttr == nil || !cmd.SysProcAttr.Setpgid {
 			t.Fatalf("SysProcAttr = %+v, want Setpgid true", cmd.SysProcAttr)
@@ -189,7 +191,7 @@ func TestApplyMemoryLimit(t *testing.T) {
 	})
 	t.Run("preserves existing SysProcAttr", func(t *testing.T) {
 		t.Parallel()
-		cmd := exec.Command("/bin/true")
+		cmd := exec.Command("true")
 		setSysProcAttr(cmd)
 		existing := cmd.SysProcAttr
 		applyMemoryLimit(cmd, 1<<20)
@@ -461,7 +463,7 @@ func TestReapClosesJobHandle(t *testing.T) {
 	m.assignJobFn = func(int, string) (*jobHandle, error) { return &jobHandle{}, nil }
 	h, err := m.Start(context.Background(), process.StartSpec{
 		ID:      "proc-01REAPJOBCLOSE000000001",
-		Command: []string{"/bin/true"},
+		Command: []string{"true"},
 	})
 	if err != nil {
 		t.Fatalf("Start: %v", err)

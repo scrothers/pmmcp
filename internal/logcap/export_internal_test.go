@@ -19,6 +19,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -53,6 +54,9 @@ func TestAddFileToTarMissingFileReturnsNil(t *testing.T) {
 
 func TestAddFileToTarStatPermissionDenied(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits don't block reads the way chmod 600 implies")
+	}
 	if os.Getuid() == 0 {
 		t.Skip("running as root: directory permission bits don't block root")
 	}
@@ -85,6 +89,9 @@ func TestAddFileToTarStatPermissionDenied(t *testing.T) {
 
 func TestAddFileToTarOpenPermissionDenied(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits don't block reads the way chmod 000 implies")
+	}
 	if os.Getuid() == 0 {
 		t.Skip("running as root: file permission bits don't block root reads")
 	}

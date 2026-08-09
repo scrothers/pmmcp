@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"syscall"
 	"testing"
@@ -40,6 +41,7 @@ import (
 	"github.com/scrothers/pmmcp/internal/process"
 	"github.com/scrothers/pmmcp/internal/store"
 	"github.com/scrothers/pmmcp/internal/store/sqlite"
+	"github.com/scrothers/pmmcp/internal/testsock"
 )
 
 // dialDaemon boots srv's IPC listener in the background and returns a
@@ -60,7 +62,10 @@ func dialDaemon(ctx context.Context, t *testing.T, srv *daemon.Server, sock stri
 	if c == nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { _ = c.Close() })
+	t.Cleanup(func() {
+		stopAllForTest(ctx, t, c)
+		_ = c.Close()
+	})
 	return c
 }
 
@@ -68,7 +73,7 @@ func TestRelaunchEligibleListErrorAfterClose(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	cfg := newTestConfig(t, dir)
-	srv, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,11 +89,11 @@ func TestRelaunchEligibleSkipsAlreadyRunningUnderManager(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	cfg := newTestConfig(t, dir)
-	sock := filepath.Join(dir, "d.sock")
+	sock := testsock.Path(t)
 	cfg.IPC.Endpoint = sock
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,10 +128,10 @@ func TestRelaunchEligibleSkipsAlreadyRunningUnderManager(t *testing.T) {
 func TestRelaunchEligibleAdoptsLivePredecessor(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "db.sqlite")
+	dbPath := sqliteDBPathForTest(t)
 
 	cfg1 := newTestConfig(t, dir)
-	cfg1.IPC.Endpoint = filepath.Join(dir, "d1.sock")
+	cfg1.IPC.Endpoint = testsock.Path(t)
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	srv1, err := daemon.New(ctx1, daemon.Options{Config: cfg1, DBPath: dbPath})
 	if err != nil {
@@ -150,7 +155,7 @@ func TestRelaunchEligibleAdoptsLivePredecessor(t *testing.T) {
 	})
 
 	cfg2 := newTestConfig(t, dir)
-	cfg2.IPC.Endpoint = filepath.Join(dir, "d2.sock")
+	cfg2.IPC.Endpoint = testsock.Path(t)
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	t.Cleanup(cancel2)
 	srv2, err := daemon.New(ctx2, daemon.Options{Config: cfg2, DBPath: dbPath})
@@ -177,10 +182,10 @@ func TestRelaunchEligibleAdoptsLivePredecessor(t *testing.T) {
 func TestRelaunchEligibleRestartsDeadPredecessor(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "db.sqlite")
+	dbPath := sqliteDBPathForTest(t)
 
 	cfg1 := newTestConfig(t, dir)
-	cfg1.IPC.Endpoint = filepath.Join(dir, "d1.sock")
+	cfg1.IPC.Endpoint = testsock.Path(t)
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	srv1, err := daemon.New(ctx1, daemon.Options{Config: cfg1, DBPath: dbPath})
 	if err != nil {
@@ -206,7 +211,7 @@ func TestRelaunchEligibleRestartsDeadPredecessor(t *testing.T) {
 	_ = srv1.Close()
 
 	cfg2 := newTestConfig(t, dir)
-	cfg2.IPC.Endpoint = filepath.Join(dir, "d2.sock")
+	cfg2.IPC.Endpoint = testsock.Path(t)
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	t.Cleanup(cancel2)
 	srv2, err := daemon.New(ctx2, daemon.Options{Config: cfg2, DBPath: dbPath})
@@ -230,15 +235,18 @@ func TestRelaunchEligibleRestartsDeadPredecessor(t *testing.T) {
 
 func TestRelaunchEligibleRestartFailureMarksFailed(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("execs a #!/bin/sh script directly; shebang exec is POSIX-only")
+	}
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "db.sqlite")
+	dbPath := sqliteDBPathForTest(t)
 	script := filepath.Join(dir, "run.sh")
 	if err := os.WriteFile(script, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	cfg1 := newTestConfig(t, dir)
-	cfg1.IPC.Endpoint = filepath.Join(dir, "d1.sock")
+	cfg1.IPC.Endpoint = testsock.Path(t)
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	srv1, err := daemon.New(ctx1, daemon.Options{Config: cfg1, DBPath: dbPath})
 	if err != nil {
@@ -268,7 +276,7 @@ func TestRelaunchEligibleRestartFailureMarksFailed(t *testing.T) {
 	}
 
 	cfg2 := newTestConfig(t, dir)
-	cfg2.IPC.Endpoint = filepath.Join(dir, "d2.sock")
+	cfg2.IPC.Endpoint = testsock.Path(t)
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	t.Cleanup(cancel2)
 	srv2, err := daemon.New(ctx2, daemon.Options{Config: cfg2, DBPath: dbPath})
@@ -303,7 +311,7 @@ func newTestConfig(t *testing.T, dir string) *config.Config {
 		t.Fatal(err)
 	}
 	cfg.StateDir = filepath.Join(dir, "state")
-	cfg.IPC.Endpoint = filepath.Join(dir, "pmmcpd.sock")
+	cfg.IPC.Endpoint = testsock.Path(t)
 	cfg.Sandbox.Default = "off"
 	cfg.Relaunch.Enabled = false
 	return cfg
@@ -317,6 +325,12 @@ func TestNewNilConfig(t *testing.T) {
 }
 
 func TestNewStateDirMkdirAllFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// os.Mkdir(..., 0o500) doesn't block directory-content creation on
+		// Windows (no POSIX write-bit enforcement), so New() would unexpectedly
+		// succeed here — and its *Server would leak (this test discards it).
+		t.Skip("POSIX permission bits aren't enforced by Windows ACLs")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses directory write permission checks")
 	}
@@ -329,7 +343,7 @@ func TestNewStateDirMkdirAllFails(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(parent, 0o700) })
 	cfg := newTestConfig(t, dir)
 	cfg.StateDir = filepath.Join(parent, "state")
-	if _, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")}); err == nil {
+	if _, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)}); err == nil {
 		t.Fatal("New with an unwritable state dir parent: want error, got nil")
 	}
 }
@@ -369,7 +383,7 @@ func TestNewMigrateFails(t *testing.T) {
 		return errors.New("injected migrate failure")
 	})
 	t.Cleanup(restore)
-	if _, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")}); err == nil {
+	if _, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)}); err == nil {
 		t.Fatal("New with a failing migration: want error, got nil")
 	}
 }
@@ -382,7 +396,7 @@ func TestNewUserCurrentFails(t *testing.T) {
 		return nil, errors.New("injected user.Current failure")
 	})
 	t.Cleanup(restore)
-	if _, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")}); err == nil {
+	if _, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)}); err == nil {
 		t.Fatal("New with a failing user.Current: want error, got nil")
 	}
 }
@@ -401,7 +415,7 @@ func TestNewKeyringBackendFails(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cfg.StateDir, "keyring"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")}); err == nil {
+	if _, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)}); err == nil {
 		t.Fatal("New with a keyring path blocked by a file: want error, got nil")
 	}
 }
@@ -414,7 +428,7 @@ func TestNewAuditSQLiteLogFails(t *testing.T) {
 		return nil, errors.New("injected audit log failure")
 	})
 	t.Cleanup(restore)
-	if _, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")}); err == nil {
+	if _, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)}); err == nil {
 		t.Fatal("New with a failing audit.NewSQLiteLog: want error, got nil")
 	}
 }
@@ -427,7 +441,7 @@ func TestNewEventSQLiteLogFails(t *testing.T) {
 		return nil, errors.New("injected event log failure")
 	})
 	t.Cleanup(restore)
-	if _, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")}); err == nil {
+	if _, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)}); err == nil {
 		t.Fatal("New with a failing event.NewSQLiteLog: want error, got nil")
 	}
 }
@@ -440,7 +454,7 @@ func newAuthzTestDaemon(t *testing.T) *ipc.Client {
 	cfg := newTestConfig(t, dir)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -635,23 +649,34 @@ func TestDoStartListScanSkipsProfileMismatch(t *testing.T) {
 func TestDoStartListScanFindsRecordFromPriorProcess(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "db.sqlite")
+	dbPath := sqliteDBPathForTest(t)
 
 	cfg1 := newTestConfig(t, dir)
-	cfg1.IPC.Endpoint = filepath.Join(dir, "d1.sock")
+	cfg1.IPC.Endpoint = testsock.Path(t)
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	srv1, err := daemon.New(ctx1, daemon.Options{Config: cfg1, DBPath: dbPath})
 	if err != nil {
 		t.Fatal(err)
 	}
 	c1 := dialDaemon(ctx1, t, srv1, cfg1.IPC.Endpoint)
+	var start1 api.StartResult
 	if err := c1.Call(ctx1, api.MethodStart, api.StartPayload{
 		Name: "scanfind", Command: []string{"sleep", "30"}, Sandbox: "off", Project: "scanproj",
-	}, &map[string]any{}); err != nil {
+	}, &start1); err != nil {
 		t.Fatalf("start on srv1: %v", err)
 	}
 	// Do not stop the process: it stays non-terminal in the store. Shut down
-	// srv1 without cancelling its process (Setpgid, survives).
+	// srv1 without cancelling its process (Setpgid, survives). srv2's fresh
+	// in-memory manager never tracked this PID (only srv1's did), so neither
+	// its later Replace-driven mgr.Stop nor dialDaemon's stopAllForTest sweep
+	// (c1's connection is already dead by the time its cleanup runs) can
+	// reach it — kill it directly by PID so it isn't still alive, holding
+	// stderr.log open, when t.TempDir's cleanup runs.
+	t.Cleanup(func() {
+		if p, err := os.FindProcess(start1.PID); err == nil {
+			_ = p.Kill()
+		}
+	})
 	cancel1()
 	_ = srv1.Close()
 
@@ -659,7 +684,7 @@ func TestDoStartListScanFindsRecordFromPriorProcess(t *testing.T) {
 	// start with the same (project, name, profile) must fall through to the
 	// store.List scan and find the still-non-terminal record from srv1.
 	cfg2 := newTestConfig(t, dir)
-	cfg2.IPC.Endpoint = filepath.Join(dir, "d2.sock")
+	cfg2.IPC.Endpoint = testsock.Path(t)
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	t.Cleanup(cancel2)
 	srv2, err := daemon.New(ctx2, daemon.Options{Config: cfg2, DBPath: dbPath})
@@ -749,7 +774,7 @@ func TestDoStartLogDirMkdirAllFails(t *testing.T) {
 	cfg := newTestConfig(t, dir)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -899,7 +924,7 @@ func newBareServer(t *testing.T) *daemon.Server {
 	t.Helper()
 	dir := t.TempDir()
 	cfg := newTestConfig(t, dir)
-	srv, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1089,10 +1114,10 @@ func TestResolveIDAmbiguousName(t *testing.T) {
 func TestResolveIDByNameFindsTerminalPredecessorAcrossRestart(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "db.sqlite")
+	dbPath := sqliteDBPathForTest(t)
 
 	cfg1 := newTestConfig(t, dir)
-	cfg1.IPC.Endpoint = filepath.Join(dir, "d1.sock")
+	cfg1.IPC.Endpoint = testsock.Path(t)
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	srv1, err := daemon.New(ctx1, daemon.Options{Config: cfg1, DBPath: dbPath})
 	if err != nil {
@@ -1115,7 +1140,7 @@ func TestResolveIDByNameFindsTerminalPredecessorAcrossRestart(t *testing.T) {
 	// matching record is the terminal one from srv1, which must still resolve
 	// (not error) via the final `return list[0].ID, list[0], nil` fallback.
 	cfg2 := newTestConfig(t, dir)
-	cfg2.IPC.Endpoint = filepath.Join(dir, "d2.sock")
+	cfg2.IPC.Endpoint = testsock.Path(t)
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	t.Cleanup(cancel2)
 	srv2, err := daemon.New(ctx2, daemon.Options{Config: cfg2, DBPath: dbPath})
@@ -1139,10 +1164,10 @@ func TestResolveIDByNameFindsTerminalPredecessorAcrossRestart(t *testing.T) {
 func TestDoStopManagerErrNotFoundAcrossRestart(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "db.sqlite")
+	dbPath := sqliteDBPathForTest(t)
 
 	cfg1 := newTestConfig(t, dir)
-	cfg1.IPC.Endpoint = filepath.Join(dir, "d1.sock")
+	cfg1.IPC.Endpoint = testsock.Path(t)
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	srv1, err := daemon.New(ctx1, daemon.Options{Config: cfg1, DBPath: dbPath})
 	if err != nil {
@@ -1164,7 +1189,7 @@ func TestDoStopManagerErrNotFoundAcrossRestart(t *testing.T) {
 	})
 
 	cfg2 := newTestConfig(t, dir)
-	cfg2.IPC.Endpoint = filepath.Join(dir, "d2.sock")
+	cfg2.IPC.Endpoint = testsock.Path(t)
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	t.Cleanup(cancel2)
 	srv2, err := daemon.New(ctx2, daemon.Options{Config: cfg2, DBPath: dbPath})
@@ -1237,6 +1262,9 @@ func TestDoRestartIDGenerationFailure(t *testing.T) {
 }
 
 func TestDoRestartLogDirMkdirAllFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits aren't enforced by Windows ACLs")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses directory write permission checks")
 	}
@@ -1245,7 +1273,7 @@ func TestDoRestartLogDirMkdirAllFails(t *testing.T) {
 	cfg := newTestConfig(t, dir)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1273,6 +1301,9 @@ func TestDoRestartLogDirMkdirAllFails(t *testing.T) {
 
 func TestDoRestartManagerStartFails(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("execs a #!/bin/sh script directly; shebang exec is POSIX-only")
+	}
 	dir := t.TempDir()
 	script := filepath.Join(dir, "restart-run.sh")
 	if err := os.WriteFile(script, []byte("#!/bin/sh\nsleep 5\n"), 0o755); err != nil {
@@ -1281,7 +1312,7 @@ func TestDoRestartManagerStartFails(t *testing.T) {
 	cfg := newTestConfig(t, dir)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1386,7 +1417,7 @@ func TestDoListError(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	cfg := newTestConfig(t, dir)
-	srv, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1470,7 +1501,7 @@ func TestDoLogsMinLevelFilter(t *testing.T) {
 	ctx, _, c, _ := startTestDaemon(t)
 	var start api.StartResult
 	if err := c.Call(ctx, api.MethodStart, api.StartPayload{
-		Name: "loglevel", Command: []string{"/bin/sh", "-c", `echo '{"level":"error","msg":"boom"}'; sleep 2`},
+		Name: "loglevel", Command: []string{"sh", "-c", `echo '{"level":"error","msg":"boom"}'; sleep 2`},
 	}, &start); err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -1504,7 +1535,7 @@ func TestListenAndServeListenError(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.IPC.Endpoint = filepath.Join(blocker, "pmmcpd.sock")
-	srv, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1516,15 +1547,18 @@ func TestListenAndServeListenError(t *testing.T) {
 
 func TestListenAndServeRelaunchFailureAudited(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("execs a #!/bin/sh script directly; shebang exec is POSIX-only")
+	}
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "db.sqlite")
+	dbPath := sqliteDBPathForTest(t)
 	script := filepath.Join(dir, "boot-run.sh")
 	if err := os.WriteFile(script, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	cfg1 := newTestConfig(t, dir)
-	cfg1.IPC.Endpoint = filepath.Join(dir, "d1.sock")
+	cfg1.IPC.Endpoint = testsock.Path(t)
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	srv1, err := daemon.New(ctx1, daemon.Options{Config: cfg1, DBPath: dbPath})
 	if err != nil {
@@ -1573,7 +1607,7 @@ func TestListenAndServeRelaunchFailureAudited(t *testing.T) {
 	}
 
 	cfg2 := newTestConfig(t, dir)
-	cfg2.IPC.Endpoint = filepath.Join(dir, "d2.sock")
+	cfg2.IPC.Endpoint = testsock.Path(t)
 	cfg2.Relaunch.Enabled = true
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	t.Cleanup(cancel2)
@@ -1597,7 +1631,7 @@ func TestRelaunchEligibleSkipsIneligibleDesiredStopped(t *testing.T) {
 	cfg := newTestConfig(t, dir)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1639,7 +1673,7 @@ func TestDaemonInfoRedactsTokenFile(t *testing.T) {
 	cfg.TokenFile = filepath.Join(dir, "token")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1695,7 +1729,7 @@ func TestResolveIDProjectScopedListErrorAfterClose(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	cfg := newTestConfig(t, dir)
-	srv, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := daemon.New(context.Background(), daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1872,7 +1906,7 @@ func TestNewWithStoreOverrideClosesRealHandle(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv, err := daemon.New(context.Background(), daemon.Options{
-		Config: cfg, DBPath: filepath.Join(dir, "db.sqlite"), Store: fakeStore,
+		Config: cfg, DBPath: sqliteDBPathForTest(t), Store: fakeStore,
 	})
 	if err != nil {
 		t.Fatal(err)

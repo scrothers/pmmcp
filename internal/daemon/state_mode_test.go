@@ -18,13 +18,20 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/scrothers/pmmcp/internal/config"
 	"github.com/scrothers/pmmcp/internal/daemon"
+	"github.com/scrothers/pmmcp/internal/testsock"
 )
 
 func TestStateDirMode0700(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// os.FileMode.Perm() on Windows is synthesized (no POSIX permission
+		// bits), so this always reports 0777 for a directory regardless of ACLs.
+		t.Skip("POSIX permission bits aren't meaningful on Windows")
+	}
 	t.Parallel()
 	dir := t.TempDir()
 	cfg, err := config.Load(config.LoadOptions{
@@ -35,7 +42,7 @@ func TestStateDirMode0700(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.StateDir = filepath.Join(dir, "state")
-	cfg.IPC.Endpoint = filepath.Join(dir, "s.sock")
+	cfg.IPC.Endpoint = testsock.Path(t)
 	cfg.Sandbox.Default = "off"
 	cfg.Relaunch.Enabled = false
 	ctx := context.Background()

@@ -30,6 +30,7 @@ import (
 	"github.com/scrothers/pmmcp/internal/domain"
 	"github.com/scrothers/pmmcp/internal/ipc"
 	"github.com/scrothers/pmmcp/internal/process"
+	"github.com/scrothers/pmmcp/internal/testsock"
 	"github.com/scrothers/pmmcp/internal/webhook"
 )
 
@@ -111,7 +112,7 @@ func newTestDaemon(t *testing.T, tweak func(*config.Config)) (*ipc.Client, *fake
 func newTestDaemonOpts(t *testing.T, tweak func(*config.Config), optsTweak func(*daemon.Options)) (*ipc.Client, *fakeMgr) {
 	t.Helper()
 	dir := t.TempDir()
-	sock := filepath.Join(dir, "pmmcpd.sock")
+	sock := testsock.Path(t)
 	cfg, err := config.Load(config.LoadOptions{
 		GOOS: "linux", Home: dir,
 		LookupEnv: func(string) (string, bool) { return "", false },
@@ -129,7 +130,7 @@ func newTestDaemonOpts(t *testing.T, tweak func(*config.Config), optsTweak func(
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	opts := daemon.Options{
-		Config: cfg, DBPath: filepath.Join(dir, "db.sqlite"), Manager: mgr,
+		Config: cfg, DBPath: sqliteDBPathForTest(t), Manager: mgr,
 		// Fast test clocks: same code paths as production, just quicker ticks
 		// and follow windows so handler tests don't wait out second-scale
 		// production intervals.

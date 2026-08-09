@@ -16,6 +16,7 @@ package daemon
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/scrothers/pmmcp/internal/domain"
@@ -149,9 +150,18 @@ func (s *Server) stopAllWatchers() {
 	}
 }
 
-// startWatchForProcess starts a debounced watcher that restarts the process on change.
+// startWatchForProcess starts a debounced watcher that restarts the process on
+// change. The consumer goroutine below calls restartByID/events.Append —
+// real store writes — so it is tracked in s.bg the same as the fixed
+// supervision loops: Close must wait for it before closing the store, or a
+// watch event landing right at shutdown races the SQLite handle going away
+// (and, on Windows, leaves the database file undeletable).
 func (s *Server) startWatchForProcess(ctx context.Context, processID, path string) error {
 	s.mu.Lock()
+	if s.closing {
+		s.mu.Unlock()
+		return fmt.Errorf("daemon: shutting down")
+	}
 	if old, ok := s.watchers[processID]; ok {
 		_ = old.Close()
 		delete(s.watchers, processID)
@@ -167,11 +177,22 @@ func (s *Server) startWatchForProcess(ctx context.Context, processID, path strin
 	}
 	w.Start(ctx)
 	s.mu.Lock()
+	// Re-check under the same lock Close takes for its closing flag: had Close
+	// run between the unlock above and here, bg.Add below could otherwise race
+	// a bg.Wait already in progress (sync.WaitGroup requires Add-from-zero to
+	// happen-before the Wait it competes with).
+	if s.closing {
+		s.mu.Unlock()
+		_ = w.Close()
+		return fmt.Errorf("daemon: shutting down")
+	}
 	s.watchers[processID] = w
 	s.watches[processID] = path
+	s.bg.Add(1)
 	s.mu.Unlock()
 
 	go func() {
+		defer s.bg.Done()
 		for {
 			select {
 			case <-ctx.Done():

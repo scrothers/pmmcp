@@ -17,6 +17,7 @@ package darwin_test
 import (
 	"context"
 	"errors"
+	"runtime"
 	"testing"
 
 	"github.com/scrothers/pmmcp/internal/sandbox"
@@ -44,8 +45,15 @@ func TestApplyStandard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Profile != sandbox.Standard || got.Mode != sandbox.ModePolicy {
-		t.Fatalf("got %+v", got)
+	// On a real macOS runner, IsolationAvailable() finds the genuine
+	// sandbox-exec binary on PATH and Apply upgrades to seatbelt mode; every
+	// other GOOS uses the non-darwin stub, which is always unavailable.
+	wantMode := sandbox.ModePolicy
+	if runtime.GOOS == "darwin" {
+		wantMode = "seatbelt"
+	}
+	if got.Profile != sandbox.Standard || got.Mode != wantMode {
+		t.Fatalf("got %+v, want mode %q", got, wantMode)
 	}
 }
 
@@ -112,8 +120,15 @@ func TestApplyStrict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Profile != sandbox.Strict || got.Mode != sandbox.ModePolicy {
-		t.Fatalf("got %+v", got)
+	// On a real macOS runner, IsolationAvailable() finds the genuine
+	// sandbox-exec binary on PATH and Apply upgrades to seatbelt mode; every
+	// other GOOS uses the non-darwin stub, which is always unavailable.
+	wantMode := sandbox.ModePolicy
+	if runtime.GOOS == "darwin" {
+		wantMode = "seatbelt"
+	}
+	if got.Profile != sandbox.Strict || got.Mode != wantMode {
+		t.Fatalf("got %+v, want mode %q", got, wantMode)
 	}
 }
 

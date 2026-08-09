@@ -159,6 +159,7 @@ func TestLoadHomeDirFailure(t *testing.T) {
 		t.Run(goos, func(t *testing.T) {
 			clearOverlayEnv(t)
 			t.Setenv("HOME", "")
+			t.Setenv("USERPROFILE", "")
 			_, err := config.Load(config.LoadOptions{
 				GOOS:      goos,
 				LookupEnv: noEnv,

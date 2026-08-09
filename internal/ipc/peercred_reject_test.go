@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/scrothers/pmmcp/internal/ipc"
+	"github.com/scrothers/pmmcp/internal/testsock"
 )
 
 // TestPeerFilterRejectsMismatchedUID verifies the filter compares peer UID to
@@ -34,8 +34,7 @@ func TestPeerFilterSameUIDOnly(t *testing.T) {
 	if ipc.AllowedUID() != uint32(os.Getuid()) {
 		t.Fatalf("AllowedUID=%d getuid=%d", ipc.AllowedUID(), os.Getuid())
 	}
-	dir := t.TempDir()
-	sock := filepath.Join(dir, "p.sock")
+	sock := testsock.Path(t)
 	ln, err := ipc.Listen(sock)
 	if err != nil {
 		t.Fatal(err)

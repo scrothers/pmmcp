@@ -25,6 +25,7 @@ import (
 	"github.com/scrothers/pmmcp/internal/config"
 	"github.com/scrothers/pmmcp/internal/daemon"
 	"github.com/scrothers/pmmcp/internal/ipc"
+	"github.com/scrothers/pmmcp/internal/testsock"
 )
 
 // TestAllMethodsDispatched ensures every api method is handled (not "unknown method").
@@ -44,7 +45,10 @@ func TestAllMethodsDispatched(t *testing.T) {
 			t.Errorf("method %s unknown: %v", m, err)
 		}
 	}
-	_ = c.Call(ctx, api.MethodStop, map[string]any{"id": startID, "timeout_sec": 2}, &map[string]any{})
+	// AllMethods includes start/run variants that spawn extra processes beyond
+	// startID; sweep everything so none are still alive (holding a log file
+	// open) when t.TempDir's cleanup runs — see stopAllForTest.
+	stopAllForTest(ctx, t, c)
 }
 
 // TestCoreMethodsSucceed requires real success on the product path for key tools.
@@ -101,7 +105,7 @@ func TestCoreMethodsSucceed(t *testing.T) {
 func bootParityDaemon(t *testing.T) (context.Context, context.CancelFunc, *ipc.Client, string, string) {
 	t.Helper()
 	dir := t.TempDir()
-	sock := filepath.Join(dir, "pmmcpd.sock")
+	sock := testsock.Path(t)
 	cfg, err := config.Load(config.LoadOptions{
 		GOOS: "linux", Home: dir,
 		LookupEnv: func(string) (string, bool) { return "", false },
@@ -116,7 +120,7 @@ func bootParityDaemon(t *testing.T) (context.Context, context.CancelFunc, *ipc.C
 	cfg.Webhook.Allowlist = []string{"*.example.com"}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: filepath.Join(dir, "t.db")})
+	srv, err := daemon.New(ctx, daemon.Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}

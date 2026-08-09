@@ -24,6 +24,21 @@ import (
 	"github.com/scrothers/pmmcp/internal/service/windows"
 )
 
+// setHome sets HOME and USERPROFILE to dir, and unsetHome clears both —
+// installDir's HOME fallback goes through os.UserHomeDir, which on windows
+// consults USERPROFILE instead of HOME.
+func setHome(t *testing.T, dir string) {
+	t.Helper()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+}
+
+func unsetHome(t *testing.T) {
+	t.Helper()
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+}
+
 func TestInstallUninstall(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("LOCALAPPDATA", root)
@@ -76,7 +91,7 @@ func TestInstallUninstall(t *testing.T) {
 func TestInstallDirFallback(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("LOCALAPPDATA", "")
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	p, err := windows.InstallDir()
 	if err != nil {
 		t.Fatalf("InstallDir: %v", err)
@@ -175,7 +190,7 @@ func TestInstallEmptyPath(t *testing.T) {
 
 func TestInstallDirHomeDirError(t *testing.T) {
 	t.Setenv("LOCALAPPDATA", "")
-	t.Setenv("HOME", "")
+	unsetHome(t)
 	if _, err := windows.InstallDir(); err == nil {
 		t.Fatal("want error when LOCALAPPDATA and HOME are both unset")
 	}
@@ -183,7 +198,7 @@ func TestInstallDirHomeDirError(t *testing.T) {
 
 func TestInstallInstallDirError(t *testing.T) {
 	t.Setenv("LOCALAPPDATA", "")
-	t.Setenv("HOME", "")
+	unsetHome(t)
 	if err := windows.Install(context.Background(), `C:\Tools\pmmcpd.exe`); err == nil {
 		t.Fatal("want error when installDir cannot be resolved")
 	}
@@ -191,7 +206,7 @@ func TestInstallInstallDirError(t *testing.T) {
 
 func TestUninstallInstallDirError(t *testing.T) {
 	t.Setenv("LOCALAPPDATA", "")
-	t.Setenv("HOME", "")
+	unsetHome(t)
 	if err := windows.Uninstall(context.Background()); err == nil {
 		t.Fatal("want error when installDir cannot be resolved")
 	}

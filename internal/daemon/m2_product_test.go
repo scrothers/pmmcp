@@ -56,7 +56,7 @@ func TestRunOneshotWait(t *testing.T) {
 	var out map[string]any
 	// RunPayload embeds StartPayload fields at top level typically — check types
 	err := c.Call(ctx, api.MethodRun, map[string]any{
-		"name": "job", "command": []string{"/bin/echo", "hello-job"}, "sandbox": "off",
+		"name": "job", "command": []string{"echo", "hello-job"}, "sandbox": "off",
 		"wait": true, "timeout_sec": 5,
 	}, &out)
 	if err != nil {
@@ -70,7 +70,7 @@ func TestLogsTailAndGrep(t *testing.T) {
 	var start api.StartResult
 	if err := c.Call(ctx, api.MethodStart, api.StartPayload{
 		Name: "logt", Sandbox: "off",
-		Command: []string{"/bin/sh", "-c", "echo line1; echo ERROR boom; echo line3"},
+		Command: []string{"sh", "-c", "echo line1; echo ERROR boom; echo line3"},
 	}, &start); err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestSecretRedactedInLogs(t *testing.T) {
 	var start api.StartResult
 	if err := c.Call(ctx, api.MethodStart, api.StartPayload{
 		Name: "secr", Sandbox: "off",
-		Command: []string{"/bin/echo", "API_TOKEN=supersecretvalue"},
+		Command: []string{"echo", "API_TOKEN=supersecretvalue"},
 	}, &start); err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestEnvFileLoaded(t *testing.T) {
 	}
 	var start api.StartResult
 	if err := c.Call(ctx, api.MethodStart, api.StartPayload{
-		Name: "envf", Command: []string{"/bin/sh", "-c", "echo FROM_FILE=$FROM_FILE"},
+		Name: "envf", Command: []string{"sh", "-c", "echo FROM_FILE=$FROM_FILE"},
 		Sandbox: "off", EnvFiles: []string{envPath},
 	}, &start); err != nil {
 		t.Fatal(err)

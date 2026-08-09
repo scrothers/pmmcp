@@ -18,16 +18,18 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/scrothers/pmmcp/internal/api"
 	pmmcpv1 "github.com/scrothers/pmmcp/internal/api/gen/pmmcp/v1"
 	"github.com/scrothers/pmmcp/internal/domain"
+	"github.com/scrothers/pmmcp/internal/ipc"
 	"github.com/scrothers/pmmcp/internal/mcp"
+	"github.com/scrothers/pmmcp/internal/testsock"
 	"google.golang.org/grpc"
 )
 
@@ -72,8 +74,8 @@ func (fakeDaemon) Call(_ context.Context, req *pmmcpv1.CallRequest) (*pmmcpv1.Ca
 
 func startFakeDaemon(t *testing.T) string {
 	t.Helper()
-	sock := filepath.Join(t.TempDir(), "d.sock")
-	ln, err := net.Listen("unix", sock)
+	sock := testsock.Path(t)
+	ln, err := ipc.Listen(sock)
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
@@ -102,8 +104,8 @@ func (d flakyDaemon) Call(ctx context.Context, req *pmmcpv1.CallRequest) (*pmmcp
 
 func startFlakyDaemon(t *testing.T, fail map[string]bool) string {
 	t.Helper()
-	sock := filepath.Join(t.TempDir(), "flaky.sock")
-	ln, err := net.Listen("unix", sock)
+	sock := testsock.Path(t)
+	ln, err := ipc.Listen(sock)
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
@@ -223,7 +225,7 @@ func TestListResourcesDaemonUp(t *testing.T) {
 
 func TestListResourcesDaemonDown(t *testing.T) {
 	t.Parallel()
-	sock := filepath.Join(t.TempDir(), "absent.sock")
+	sock := testsock.Path(t)
 	res, err := mcp.ListResources(context.Background(), sock)
 	if err == nil {
 		t.Fatal("want daemon-down error, got nil")
@@ -269,7 +271,7 @@ func TestResourceTemplates(t *testing.T) {
 
 func TestReadResourceDaemonDialError(t *testing.T) {
 	t.Parallel()
-	sock := filepath.Join(t.TempDir(), "absent.sock")
+	sock := testsock.Path(t)
 	_, err := mcp.ReadResource(context.Background(), sock, "pmmcp://processes")
 	if err == nil {
 		t.Fatal("want dial error, got nil")
@@ -341,6 +343,13 @@ func TestReadResourceProcessLogByName(t *testing.T) {
 // Mutates process-global working directory state, so it cannot run in
 // parallel with other tests that depend on cwd.
 func TestReadDeclareGetwdError(t *testing.T) {
+	// Deleting the cwd out from under the process only reliably fails a
+	// subsequent os.Getwd() on Linux; macOS's getcwd() can still resolve a
+	// path after the directory is unlinked, so readDeclare falls through to
+	// its ordinary not-found branch instead.
+	if runtime.GOOS != "linux" {
+		t.Skip("os.Getwd() after cwd deletion is Linux-specific")
+	}
 	dir := t.TempDir()
 	t.Chdir(dir)
 	if err := os.RemoveAll(dir); err != nil {

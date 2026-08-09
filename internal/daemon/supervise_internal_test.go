@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -30,8 +31,67 @@ import (
 	"github.com/scrothers/pmmcp/internal/config"
 	"github.com/scrothers/pmmcp/internal/domain"
 	"github.com/scrothers/pmmcp/internal/event"
+	"github.com/scrothers/pmmcp/internal/store"
+	"github.com/scrothers/pmmcp/internal/testsock"
 	"github.com/scrothers/pmmcp/internal/webhook"
 )
+
+// stopAllSuperviseForTest force-stops every process this white-box server
+// still has recorded and waits (via the short-timeout force path) for each
+// to actually exit. Server.Close cancels the run context but never stops
+// managed children or waits for background loops before returning, so an
+// orphaned "sleep"-style process can still be alive — with its log file
+// still open — when t.TempDir's cleanup runs right after. POSIX allows
+// unlinking a file another process still has open; Windows does not, so
+// there this turns into a "used by another process" cleanup failure.
+//
+// s.autoRestart is cleared directly (this file is white-box, package daemon)
+// before stopping: it's only ever cleared by doRemove in production, never by
+// a plain Stop, so runAutoRestartLoop's next tick (as fast as every 25ms in
+// these test configs) could otherwise resurrect a process moments after this
+// sweep returns, leaving a fresh orphan holding a new log file open.
+func stopAllSuperviseForTest(ctx context.Context, t *testing.T, s *Server) {
+	t.Helper()
+	list, err := s.store.List(ctx, store.ProcessFilter{})
+	if err != nil {
+		return
+	}
+	s.mu.Lock()
+	for _, rec := range list {
+		delete(s.autoRestart, rec.ID)
+	}
+	s.mu.Unlock()
+	for _, rec := range list {
+		_ = s.mgr.Stop(ctx, rec.ID, time.Millisecond)
+	}
+}
+
+// sqliteDBPathForTest is the package-daemon (white-box) twin of the identical
+// helper in product_test.go (package daemon_test) — see its comment there for
+// the full rationale. Duplicated rather than shared because the two test
+// suites are different packages.
+func sqliteDBPathForTest(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return filepath.Join(t.TempDir(), "db.sqlite")
+	}
+	dbDir, err := os.MkdirTemp("", "pmmcp-db-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		deadline := time.Now().Add(2 * time.Second)
+		var rmErr error
+		for time.Now().Before(deadline) {
+			if rmErr = os.RemoveAll(dbDir); rmErr == nil {
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		t.Logf("sqliteDBPathForTest: %s still busy after retrying for 2s: %v", dbDir, rmErr)
+	})
+	return filepath.Join(dbDir, "db.sqlite")
+}
 
 // newSuperviseTestServer builds a real *Server (real local process manager, real
 // SQLite-backed store/audit/events) for whitebox tests that need direct access
@@ -49,7 +109,7 @@ func newSuperviseTestServer(t *testing.T, tweak func(*config.Config)) (*Server, 
 		t.Fatal(err)
 	}
 	cfg.StateDir = filepath.Join(dir, "state")
-	cfg.IPC.Endpoint = filepath.Join(dir, "pmmcpd.sock")
+	cfg.IPC.Endpoint = testsock.Path(t)
 	cfg.Sandbox.Default = "off"
 	cfg.Relaunch.Enabled = false
 	if tweak != nil {
@@ -57,11 +117,12 @@ func newSuperviseTestServer(t *testing.T, tweak func(*config.Config)) (*Server, 
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	srv, err := New(ctx, Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := New(ctx, Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = srv.Close() })
+	t.Cleanup(func() { stopAllSuperviseForTest(ctx, t, srv) })
 	return srv, ctx
 }
 
@@ -80,7 +141,7 @@ func newSuperviseTestServerOpts(t *testing.T, tweak func(*config.Config), optsTw
 		t.Fatal(err)
 	}
 	cfg.StateDir = filepath.Join(dir, "state")
-	cfg.IPC.Endpoint = filepath.Join(dir, "pmmcpd.sock")
+	cfg.IPC.Endpoint = testsock.Path(t)
 	cfg.Sandbox.Default = "off"
 	cfg.Relaunch.Enabled = false
 	if tweak != nil {
@@ -88,7 +149,7 @@ func newSuperviseTestServerOpts(t *testing.T, tweak func(*config.Config), optsTw
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	opts := Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")}
+	opts := Options{Config: cfg, DBPath: sqliteDBPathForTest(t)}
 	if optsTweak != nil {
 		optsTweak(&opts)
 	}
@@ -97,6 +158,7 @@ func newSuperviseTestServerOpts(t *testing.T, tweak func(*config.Config), optsTw
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = srv.Close() })
+	t.Cleanup(func() { stopAllSuperviseForTest(ctx, t, srv) })
 	return srv, ctx
 }
 
@@ -129,7 +191,7 @@ func TestProbeRunningHealthyProcessNotFound(t *testing.T) {
 func TestProbeRunningHealthyTerminalStatus(t *testing.T) {
 	t.Parallel()
 	s, ctx := newSuperviseTestServer(t, nil)
-	res := startSuperviseProcess(ctx, t, s, api.StartPayload{Name: "quick", Command: []string{"/bin/true"}, Sandbox: "off"})
+	res := startSuperviseProcess(ctx, t, s, api.StartPayload{Name: "quick", Command: []string{"true"}, Sandbox: "off"})
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		h, err := s.mgr.Inspect(ctx, res.ID)
@@ -243,7 +305,9 @@ func TestRunAutoRestartLoopRestartsExitedProcess(t *testing.T) {
 	s.autoRestartTick = 20 * time.Millisecond
 	s.autoRestartBackoff = time.Millisecond
 	res := startSuperviseProcess(ctx, t, s, api.StartPayload{
-		Name: "flappy", Command: []string{"/bin/sh", "-c", "exit 1"}, Sandbox: "off", AutoRestart: true,
+		// "sh" resolves via PATH on every CI platform (Git for Windows ships
+		// sh.exe); a hardcoded /bin/sh path doesn't exist on Windows.
+		Name: "flappy", Command: []string{"sh", "-c", "exit 1"}, Sandbox: "off", AutoRestart: true,
 	})
 
 	loopCtx, cancel := context.WithCancel(ctx)
@@ -331,7 +395,7 @@ func TestRunAutoRestartLoopStopsRestartingAtMax(t *testing.T) {
 		o.AutoRestartTick = 50 * time.Millisecond
 	})
 	res := startSuperviseProcess(ctx, t, s, api.StartPayload{
-		Name: "always-fails", Command: []string{"/bin/sh", "-c", "exit 1"}, Sandbox: "off", AutoRestart: true,
+		Name: "always-fails", Command: []string{"sh", "-c", "exit 1"}, Sandbox: "off", AutoRestart: true,
 	})
 
 	loopCtx, cancel := context.WithCancel(ctx)
@@ -726,9 +790,11 @@ func TestPidAliveLiveProcess(t *testing.T) {
 
 func TestPidAliveDeadProcess(t *testing.T) {
 	t.Parallel()
-	cmd := exec.Command("/bin/true")
+	// "true" is resolved via PATH: it lives at /bin/true on Linux but
+	// /usr/bin/true on macOS, so a hardcoded path isn't portable.
+	cmd := exec.Command("true")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("run /bin/true: %v", err)
+		t.Fatalf("run true: %v", err)
 	}
 	pid := cmd.Process.Pid
 	if pidAlive(pid) {

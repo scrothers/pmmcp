@@ -201,6 +201,12 @@ func gzipFile(path string) error {
 	if err := out.Close(); err != nil {
 		return fmt.Errorf("logcap: gzip out close: %w", err)
 	}
+	// Close the source before removing it: Windows refuses to delete a file
+	// with an open handle, so the deferred Close (kept for error paths) is
+	// too late here. Double Close on *os.File is harmless (ErrClosed).
+	if err := in.Close(); err != nil {
+		return fmt.Errorf("logcap: gzip in close: %w", err)
+	}
 	if err := os.Remove(path); err != nil {
 		return fmt.Errorf("logcap: gzip remove plain: %w", err)
 	}

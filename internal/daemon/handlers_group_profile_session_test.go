@@ -307,7 +307,7 @@ func TestDoRunWithWaitAndTimeout(t *testing.T) {
 	ctx := context.Background()
 	var out api.WaitResult
 	err := c.Call(ctx, api.MethodRun, api.RunPayload{
-		StartPayload: api.StartPayload{Name: "runwait", Command: []string{"/bin/echo", "hi"}, Sandbox: "off"},
+		StartPayload: api.StartPayload{Name: "runwait", Command: []string{"echo", "hi"}, Sandbox: "off"},
 		Wait:         true, TimeoutSec: 2,
 	}, &out)
 	if err != nil {

@@ -263,7 +263,12 @@ func TestAllowsReadGenericDenyMarker(t *testing.T) {
 // not match (e.g. ".../secretdir-backup" vs deny ".../secretdir").
 func TestPathMatchesDenyAbsolutePrefix(t *testing.T) {
 	t.Parallel()
-	deny := filepath.Join(string(filepath.Separator), "home", "user", "secretdir")
+	// deny must be genuinely filepath.IsAbs (a drive letter on windows) to
+	// land in pathMatchesDeny's absolute-prefix branch under test; a
+	// filepath.Separator-prefixed path with no drive letter is not IsAbs on
+	// windows and falls through to the substring-matching marker branch
+	// instead, which does not respect path boundaries.
+	deny := filepath.Join(t.TempDir(), "home", "user", "secretdir")
 	pol := sandbox.Policy{
 		Profile:  sandbox.Standard,
 		ReadDeny: []string{"", deny},

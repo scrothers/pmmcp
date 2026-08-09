@@ -49,7 +49,7 @@ func newGRPCInternalTestServer(t *testing.T) *Server {
 		t.Fatal(err)
 	}
 	cfg.StateDir = filepath.Join(dir, "state")
-	srv, err := New(context.Background(), Options{Config: cfg, DBPath: filepath.Join(dir, "db.sqlite")})
+	srv, err := New(context.Background(), Options{Config: cfg, DBPath: sqliteDBPathForTest(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func newLogRecord(t *testing.T, srv *Server, stdout, stderr string) string {
 	}
 	id := "proc-" + t.Name()
 	rec := &domain.Process{
-		ID: id, Name: t.Name(), Command: []string{"/bin/true"},
+		ID: id, Name: t.Name(), Command: []string{"true"},
 		Status: domain.StatusRunning, LogDir: logDir,
 	}
 	if err := srv.store.Create(context.Background(), rec); err != nil {
