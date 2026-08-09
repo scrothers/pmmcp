@@ -73,6 +73,7 @@ func TestMCPCallToolPaths(t *testing.T) {
 		args map[string]any
 	}{
 		{"pm_start", map[string]any{"name": "api", "command": []any{"./bin/api"}, "sandbox": "strict"}},
+		{"pm_run", map[string]any{"command": []any{"./bin/job"}, "cwd": "/tmp", "wait": true, "timeout_sec": float64(5)}},
 		{"pm_stop", map[string]any{"name": "api"}},
 		{"pm_status", map[string]any{"id": "proc-1"}},
 		{"pm_wait", map[string]any{"id": "proc-1", "timeout_sec": float64(5)}},

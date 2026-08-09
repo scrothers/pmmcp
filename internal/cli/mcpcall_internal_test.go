@@ -32,6 +32,7 @@ func TestMCPCallTypedErrorBranches(t *testing.T) {
 		args   map[string]any
 	}{
 		{"pm_start", api.MethodStart, map[string]any{"name": "api", "command": []any{"./bin/api"}}},
+		{"pm_run", api.MethodRun, map[string]any{"command": []any{"./bin/job"}, "wait": true, "timeout_sec": float64(5)}},
 		{"pm_stop", api.MethodStop, map[string]any{"name": "api"}},
 		{"pm_list", api.MethodList, map[string]any{"project": "p"}},
 		{"pm_logs", api.MethodLogs, map[string]any{"name": "api"}},

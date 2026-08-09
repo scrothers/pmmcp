@@ -1,4 +1,4 @@
-Import "{{path}}" into a pmmcp declare draft (Procfile or Compose).
+Import "{{path}}" into a pmmcp declare draft (Procfile; Compose import is planned but not yet supported).
 
 ## Steps
 1. **pm_import** with `path`="{{path}}".

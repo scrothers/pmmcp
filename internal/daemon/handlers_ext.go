@@ -16,6 +16,8 @@ package daemon
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -340,7 +342,20 @@ func (s *Server) doUpdate(ctx context.Context, p authz.Principal, raw []byte) ap
 func (s *Server) doRun(ctx context.Context, p authz.Principal, raw []byte) api.Response {
 	var pl api.RunPayload
 	if err := json.Unmarshal(raw, &pl); err != nil {
-		return errResp(domain.CodeInvalidArgument, "bad run payload", false)
+		// Include the decode detail: MCP agents iterate on this message, and
+		// a bare "bad payload" forces guesswork (command must be an argv
+		// array, wait a boolean, …).
+		return errResp(domain.CodeInvalidArgument, "bad run payload: "+err.Error(), false)
+	}
+	if pl.Name == "" {
+		// The CLI documents --name as optional for one-shot runs, and agents
+		// should not have to invent identities for fire-and-forget jobs —
+		// derive one so doStart's name-required invariant holds.
+		var b [4]byte
+		if _, err := rand.Read(b[:]); err != nil {
+			return errResp(domain.CodeInternal, "generate run name: "+err.Error(), false)
+		}
+		pl.Name = "run-" + hex.EncodeToString(b[:])
 	}
 	// MethodRun is always oneshot: desired stays running during wait then observed exit.
 	startRaw, err := json.Marshal(pl.StartPayload)

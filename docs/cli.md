@@ -120,7 +120,7 @@ pmmcp validate KEY=VAL…      # parse + policy-check pmmcp.yaml (no changes)
 pmmcp diff     KEY=VAL…      # show what apply would create/update/remove
 pmmcp apply    KEY=VAL…      # reconcile the project to the file
 pmmcp declare show KEY=VAL…  # show the effective declaration
-pmmcp import   KEY=VAL…      # import a Procfile / compose file into pmmcp.yaml
+pmmcp import   KEY=VAL…      # import a Procfile into pmmcp.yaml
 ```
 
 ---

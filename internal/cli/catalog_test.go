@@ -146,3 +146,29 @@ func TestAllMethodsIncludesHello(t *testing.T) {
 		t.Error("pm_hello must not be a catalog tool")
 	}
 }
+
+// TestEveryToolHasSpecializedSchema is the schema-parity gate: no catalog tool
+// may fall back to the generic empty-object schema. Tools that genuinely take
+// no arguments declare that explicitly (emptySchema: additionalProperties
+// false); everything else must describe its real payload so MCP harnesses can
+// construct calls without guessing.
+func TestEveryToolHasSpecializedSchema(t *testing.T) {
+	t.Parallel()
+	schemas := specializedSchemas()
+	for _, name := range ToolNames() {
+		s, ok := schemas[name]
+		if !ok {
+			t.Errorf("%s: no specialized schema (generic fallback)", name)
+			continue
+		}
+		props, ok := s["properties"].(map[string]any)
+		if !ok {
+			t.Errorf("%s: schema has no properties key", name)
+			continue
+		}
+		// Zero properties is only legal for the explicit no-arg declaration.
+		if len(props) == 0 && s["additionalProperties"] != false {
+			t.Errorf("%s: empty properties without additionalProperties=false — use emptySchema() or describe the payload", name)
+		}
+	}
+}

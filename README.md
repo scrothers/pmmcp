@@ -163,7 +163,7 @@ One catalog. Two costumes. Whatever you type at the terminal, the agent can call
 | **Declare** | validate · diff · apply a `pmmcp.yaml` |
 | **Secrets** | list · ref-check · set (**no** raw secrets in tool args) |
 | **Watch & webhooks** | hot reload · SSRF-aware outbound hooks |
-| **Import** | Procfile / Compose → pmmcp |
+| **Import** | Procfile → pmmcp (Compose planned) |
 
 Plus MCP **resources** (`pmmcp://processes`, `pmmcp://daemon`, …) and **prompts** (`pmmcp_start_safe`, `pmmcp_debug_crash`, …).
 
@@ -233,7 +233,7 @@ services:
     depends_on: [web]
 ```
 
-Import legacy **Procfile** / **Compose**, review warnings, apply with eyes open → **[docs/declarative.md](docs/declarative.md)**
+Import a legacy **Procfile**, review warnings, apply with eyes open → **[docs/declarative.md](docs/declarative.md)**
 
 ---
 
